@@ -19,7 +19,15 @@ describe('Delivery', () => {
 
     expect(delivery.id).toBe('delivery-1');
     expect(delivery.transactionId).toBe('transaction-1');
+    expect(delivery.customerId).toBe('customer-1');
+    expect(delivery.addressLine).toBe('Calle 123 #45-67');
+    expect(delivery.city).toBe('Bogotá');
+    expect(delivery.region).toBe('Cundinamarca');
+    expect(delivery.country).toBe('CO');
+    expect(delivery.postalCode).toBe('110111');
     expect(delivery.status).toBe('PENDING');
     expect(delivery.feeInCents).toBe(500000);
+    expect(delivery.assignedProductId).toBeNull();
+    expect(delivery.quantity).toBe(1);
   });
 });

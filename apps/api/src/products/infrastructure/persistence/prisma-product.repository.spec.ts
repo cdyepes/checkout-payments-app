@@ -18,11 +18,15 @@ function buildRow(overrides: Partial<PrismaProduct> = {}): PrismaProduct {
   };
 }
 
+function buildPrisma(client: Record<string, unknown>): PrismaService {
+  return { client: () => client } as unknown as PrismaService;
+}
+
 describe('PrismaProductRepository', () => {
   it('findAll() maps every row to a domain Product', async () => {
-    const prisma = {
+    const prisma = buildPrisma({
       product: { findMany: jest.fn().mockResolvedValue([buildRow(), buildRow({ id: 'product-2' })]) },
-    } as unknown as PrismaService;
+    });
     const repository = new PrismaProductRepository(prisma);
 
     const result = await repository.findAll();
@@ -34,9 +38,9 @@ describe('PrismaProductRepository', () => {
   });
 
   it('findAll() wraps a Prisma failure in UnexpectedError', async () => {
-    const prisma = {
+    const prisma = buildPrisma({
       product: { findMany: jest.fn().mockRejectedValue(new Error('connection lost')) },
-    } as unknown as PrismaService;
+    });
     const repository = new PrismaProductRepository(prisma);
 
     const result = await repository.findAll();
@@ -46,9 +50,9 @@ describe('PrismaProductRepository', () => {
   });
 
   it('findById() returns null when no row matches', async () => {
-    const prisma = {
+    const prisma = buildPrisma({
       product: { findUnique: jest.fn().mockResolvedValue(null) },
-    } as unknown as PrismaService;
+    });
     const repository = new PrismaProductRepository(prisma);
 
     const result = await repository.findById('missing');
@@ -58,9 +62,9 @@ describe('PrismaProductRepository', () => {
   });
 
   it('findById() maps a matching row to a domain Product', async () => {
-    const prisma = {
+    const prisma = buildPrisma({
       product: { findUnique: jest.fn().mockResolvedValue(buildRow()) },
-    } as unknown as PrismaService;
+    });
     const repository = new PrismaProductRepository(prisma);
 
     const result = await repository.findById('product-1');
