@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*.local
+*.log
+.DS_Store
+cdk.out/
+.turbo/
+*.tsbuildinfo
+
+# test brief and scratch notes — never enter the public repo
+*.pdf
+reasons.txt
+wompi-fullstack-test-pdf-*.md
