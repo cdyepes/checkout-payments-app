@@ -5,6 +5,13 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 export interface GithubOidcStackProps extends cdk.StackProps {
   githubOrg: string;
   githubRepo: string;
+  /**
+   * Name of the GitHub Environment the deploy job runs under (case-sensitive).
+   * A job bound to an environment gets an OIDC token whose `sub` claim is
+   * `repo:OWNER/REPO:environment:NAME` instead of the ref-based form, so the
+   * trust policy below needs to accept both.
+   */
+  githubEnvironment: string;
   /** Default CDK bootstrap qualifier — matches `cdk bootstrap`'s default unless customized. */
   bootstrapQualifier?: string;
 }
@@ -32,7 +39,14 @@ export class GithubOidcStack extends cdk.Stack {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
         },
         StringLike: {
-          'token.actions.githubusercontent.com:sub': `repo:${props.githubOrg}/${props.githubRepo}:ref:refs/heads/main`,
+          // Both forms point at the same repo/branch; a plain `push` job gets
+          // the ref-based sub, but a job with an `environment:` key (as
+          // deploy.yml has, for environment-scoped secrets) gets the
+          // environment-based one instead — see the doc comment above.
+          'token.actions.githubusercontent.com:sub': [
+            `repo:${props.githubOrg}/${props.githubRepo}:ref:refs/heads/main`,
+            `repo:${props.githubOrg}/${props.githubRepo}:environment:${props.githubEnvironment}`,
+          ],
         },
       }),
     });
