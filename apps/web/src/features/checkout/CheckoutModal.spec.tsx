@@ -1,6 +1,7 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithStore } from '@/test/render-with-store';
+import { buildProduct } from '@/test/build-product';
 import { CheckoutModal } from './CheckoutModal';
 
 const navigateMock = jest.fn();
@@ -9,6 +10,19 @@ jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => navigateMock,
 }));
+
+jest.mock('@/lib/payments-gateway', () => ({
+  ...jest.requireActual('@/lib/payments-gateway'),
+  tokenizeCard: jest.fn(),
+}));
+
+jest.mock('@/lib/http', () => ({
+  ...jest.requireActual('@/lib/http'),
+  getJson: jest.fn(),
+}));
+
+const { tokenizeCard } = jest.requireMock('@/lib/payments-gateway') as { tokenizeCard: jest.Mock };
+const { getJson } = jest.requireMock('@/lib/http') as { getJson: jest.Mock };
 
 const inProgressCheckout = {
   checkout: {
@@ -24,6 +38,8 @@ const inProgressCheckout = {
 describe('CheckoutModal', () => {
   beforeEach(() => {
     navigateMock.mockClear();
+    tokenizeCard.mockReset();
+    getJson.mockReset();
   });
 
   it('redirects home and renders nothing when there is no checkout in progress', () => {
@@ -55,14 +71,68 @@ describe('CheckoutModal', () => {
     expect(screen.getByTestId('checkout-backdrop')).toBeInTheDocument();
   });
 
-  it('renders the summary placeholder for the summary step', () => {
+  it('recovers from a reload mid-summary by returning to the details step, since the card token is never persisted', () => {
     renderWithStore(
       <CheckoutModal />,
       { checkout: { ...inProgressCheckout.checkout, step: 'summary' } },
       '/checkout/summary',
     );
 
-    expect(screen.getByText('Payment summary')).toBeInTheDocument();
+    expect(screen.queryByTestId('checkout-summary')).not.toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith('/checkout/details', { replace: true });
+  });
+
+  it('redirects home if the status step is somehow reached without a transaction id', () => {
+    renderWithStore(
+      <CheckoutModal />,
+      { checkout: { ...inProgressCheckout.checkout, step: 'status', transactionId: null } },
+      '/checkout/status',
+    );
+
+    expect(screen.queryByTestId('checkout-status')).not.toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith('/', { replace: true });
+  });
+
+  it('renders the status screen when a transaction id is present', () => {
+    getJson.mockReturnValue(new Promise(() => {}));
+    renderWithStore(
+      <CheckoutModal />,
+      { checkout: { ...inProgressCheckout.checkout, step: 'status', transactionId: 'tx-1' } },
+      '/checkout/status',
+    );
+
+    expect(screen.getByTestId('checkout-status')).toBeInTheDocument();
+  });
+
+  it('transitions from details to the summary step once the card is tokenized', async () => {
+    tokenizeCard.mockResolvedValueOnce('tok_test_1');
+    const user = userEvent.setup();
+    const { store } = renderWithStore(
+      <CheckoutModal />,
+      {
+        ...inProgressCheckout,
+        products: { items: [buildProduct({ id: 'product-1' })], status: 'succeeded', error: null },
+      },
+      '/checkout/details',
+    );
+
+    await user.type(screen.getByLabelText(/^Email$/i), 'jane@example.com');
+    await user.type(screen.getByLabelText(/^Full name$/i), 'Jane Doe');
+    await user.type(screen.getByLabelText(/^Phone$/i), '+573001234567');
+    await user.type(screen.getByLabelText(/^Address$/i), 'Calle 123 #45-67');
+    await user.type(screen.getByLabelText(/^City$/i), 'Bogotá');
+    await user.type(screen.getByLabelText(/^Region$/i), 'Cundinamarca');
+    await user.clear(screen.getByLabelText(/^Country$/i));
+    await user.type(screen.getByLabelText(/^Country$/i), 'CO');
+    await user.type(screen.getByLabelText(/Card number/i), '4242424242424242');
+    await user.type(screen.getByLabelText(/^Card holder$/i), 'Jane Doe');
+    await user.type(screen.getByLabelText(/Expiry/i), '1229');
+    await user.type(screen.getByLabelText(/^CVC$/i), '123');
+    await user.click(screen.getByRole('button', { name: /continue/i }));
+
+    expect(await screen.findByTestId('checkout-summary')).toBeInTheDocument();
+    expect(store.getState().checkout.step).toBe('summary');
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/checkout/summary', undefined));
   });
 
   it('closes and navigates home when the close button is clicked', async () => {

@@ -50,7 +50,12 @@ export function CardDeliveryForm({ onTokenized }: CardDeliveryFormProps) {
         cardHolder: values.card.cardHolder,
       });
 
-      dispatch(setCustomerAndDelivery({ customer: values.customer, delivery: values.delivery }));
+      // The form schema accepts '' for the optional postal code (an
+      // uncontrolled input left blank submits '', not undefined — see
+      // checkout-details.schema.ts), but the API contract only accepts a
+      // real value or an absent key, so it gets normalized back out here.
+      const delivery = { ...values.delivery, postalCode: values.delivery.postalCode || undefined };
+      dispatch(setCustomerAndDelivery({ customer: values.customer, delivery }));
       onTokenized(cardToken);
     } catch (error) {
       setGatewayError(

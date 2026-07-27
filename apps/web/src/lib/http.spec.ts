@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getJson, HttpError } from './http';
+import { getJson, HttpError, postJson } from './http';
 
 describe('getJson', () => {
   afterEach(() => {
@@ -65,5 +65,44 @@ describe('getJson', () => {
     } as Response);
 
     await expect(getJson('/health', z.object({ ok: z.boolean() }))).rejects.toThrow();
+  });
+});
+
+describe('postJson', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('posts the JSON body and parses a successful response against the given schema', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: '1' }),
+    } as Response);
+
+    const result = await postJson('/transactions', { productId: 'p1' }, z.object({ id: z.string() }));
+
+    expect(result).toEqual({ id: '1' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/transactions'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: 'p1' }),
+      }),
+    );
+  });
+
+  it('throws HttpError with the status and message on a failed response', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 409,
+      statusText: 'Conflict',
+      json: async () => ({ message: 'Not enough stock available' }),
+    } as Response);
+
+    await expect(postJson('/transactions', {}, z.unknown())).rejects.toMatchObject({
+      status: 409,
+      message: 'Not enough stock available',
+    });
   });
 });
