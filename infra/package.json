@@ -1,0 +1,26 @@
+{
+  "name": "checkout-payments-infra",
+  "version": "0.0.0",
+  "private": true,
+  "bin": {
+    "infra": "bin/app.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "bootstrap-oidc": "cdk deploy GithubOidcStack"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "aws-cdk": "^2.166.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.166.0",
+    "constructs": "^10.4.2"
+  }
+}

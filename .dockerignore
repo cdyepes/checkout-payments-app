@@ -1,0 +1,8 @@
+**/node_modules
+**/dist
+**/coverage
+**/.git
+apps/web
+infra
+.env
+.env.example

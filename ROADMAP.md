@@ -143,9 +143,8 @@ state).
 serverless-express, S3 + CloudFront + OAC for the SPA with a security-headers response policy),
 Neon Postgres for production, GitHub OIDC role (no long-lived AWS keys in secrets), `deploy.yml` on
 merge to `main`. Ends with real public URLs for both README and the rubric's deployment block.
-Before the production database is seeded, `apps/api/prisma/seed.ts` must be made idempotent
-(`prisma.product.upsert()` keyed on a `@unique` `Product.name`) — today it only works against an
-empty table, and a retried deploy step would double the catalog.
+`apps/api/prisma/seed.ts` is now idempotent (`prisma.product.upsert()` keyed on a `@unique`
+`Product.name`), so the deploy pipeline can safely (re-)seed production on every run.
 
 ## Iteration 7 — Bonus polish
 
