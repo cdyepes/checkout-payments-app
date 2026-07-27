@@ -41,3 +41,13 @@ export const GetTransactionParamsSchema = z.object({
   id: z.string().uuid(),
 });
 export type GetTransactionParams = z.infer<typeof GetTransactionParamsSchema>;
+
+export const SubmitTransactionPaymentParamsSchema = z.object({
+  id: z.string().uuid(),
+});
+export type SubmitTransactionPaymentParams = z.infer<typeof SubmitTransactionPaymentParamsSchema>;
+
+export const SubmitTransactionPaymentRequestSchema = z.object({
+  cardToken: z.string().min(1),
+});
+export type SubmitTransactionPaymentRequest = z.infer<typeof SubmitTransactionPaymentRequestSchema>;

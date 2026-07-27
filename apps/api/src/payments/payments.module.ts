@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
+import { PAYMENT_GATEWAY } from './domain/payment-gateway.port';
+import { HttpPaymentGateway } from './infrastructure/http/http-payment-gateway';
 
-// PaymentGateway port is in place; the HTTP adapter for the payment provider's
-// sandbox API lands in the checkout iteration.
-@Module({})
+@Module({
+  providers: [{ provide: PAYMENT_GATEWAY, useClass: HttpPaymentGateway }],
+  exports: [PAYMENT_GATEWAY],
+})
 export class PaymentsModule {}

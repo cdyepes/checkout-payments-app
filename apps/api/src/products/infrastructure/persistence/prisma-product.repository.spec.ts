@@ -71,4 +71,41 @@ describe('PrismaProductRepository', () => {
 
     expect(result._unsafeUnwrap()?.id).toBe('product-1');
   });
+
+  it('decrementStock() returns true and issues a conditional update when enough stock is available', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma = buildPrisma({ product: { updateMany } });
+    const repository = new PrismaProductRepository(prisma);
+
+    const result = await repository.decrementStock('product-1', 2);
+
+    expect(result._unsafeUnwrap()).toBe(true);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 'product-1', stock: { gte: 2 } },
+      data: { stock: { decrement: 2 } },
+    });
+  });
+
+  it('decrementStock() returns false when there is not enough stock', async () => {
+    const prisma = buildPrisma({
+      product: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    });
+    const repository = new PrismaProductRepository(prisma);
+
+    const result = await repository.decrementStock('product-1', 99);
+
+    expect(result._unsafeUnwrap()).toBe(false);
+  });
+
+  it('decrementStock() wraps a Prisma failure in UnexpectedError', async () => {
+    const prisma = buildPrisma({
+      product: { updateMany: jest.fn().mockRejectedValue(new Error('connection lost')) },
+    });
+    const repository = new PrismaProductRepository(prisma);
+
+    const result = await repository.decrementStock('product-1', 1);
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnexpectedError);
+  });
 });

@@ -2,11 +2,14 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestj
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TransactionResponse } from '@checkout/contracts';
 import { CreateCheckoutTransactionUseCase } from '../../application/create-checkout-transaction.use-case';
-import { GetTransactionUseCase } from '../../application/get-transaction.use-case';
+import { ReconcileTransactionUseCase } from '../../application/reconcile-transaction.use-case';
+import { SubmitTransactionPaymentUseCase } from '../../application/submit-transaction-payment.use-case';
 import { toHttpException } from '../../../shared/infrastructure/http/domain-error.mapper';
 import {
   CreateTransactionRequestDto,
   GetTransactionParamsDto,
+  SubmitTransactionPaymentParamsDto,
+  SubmitTransactionPaymentRequestDto,
   TransactionResponseDto,
 } from './transactions.dto';
 import { TransactionPresenter } from './transaction.presenter';
@@ -16,7 +19,8 @@ import { TransactionPresenter } from './transaction.presenter';
 export class TransactionsController {
   constructor(
     private readonly createCheckoutTransaction: CreateCheckoutTransactionUseCase,
-    private readonly getTransaction: GetTransactionUseCase,
+    private readonly submitTransactionPayment: SubmitTransactionPaymentUseCase,
+    private readonly reconcileTransaction: ReconcileTransactionUseCase,
   ) {}
 
   @Post()
@@ -30,11 +34,27 @@ export class TransactionsController {
     });
   }
 
+  @Post(':id/payment')
+  @ApiOperation({ summary: 'Submit a card token to charge a PENDING transaction' })
+  @ApiOkResponse({ type: TransactionResponseDto })
+  async submitPayment(
+    @Param() params: SubmitTransactionPaymentParamsDto,
+    @Body() body: SubmitTransactionPaymentRequestDto,
+  ): Promise<TransactionResponse> {
+    const result = await this.submitTransactionPayment.execute({
+      transactionId: params.id,
+      cardToken: body.cardToken,
+    });
+    return result.match(TransactionPresenter.toResponse, (error) => {
+      throw toHttpException(error);
+    });
+  }
+
   @Get(':id')
-  @ApiOperation({ summary: 'Get a single transaction by id' })
+  @ApiOperation({ summary: 'Get a transaction, reconciling its status with the gateway if still PENDING' })
   @ApiOkResponse({ type: TransactionResponseDto })
   async getById(@Param() params: GetTransactionParamsDto): Promise<TransactionResponse> {
-    const result = await this.getTransaction.execute({ id: params.id });
+    const result = await this.reconcileTransaction.execute({ transactionId: params.id });
     return result.match(TransactionPresenter.toResponse, (error) => {
       throw toHttpException(error);
     });

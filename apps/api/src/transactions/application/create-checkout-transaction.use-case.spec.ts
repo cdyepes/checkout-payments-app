@@ -107,6 +107,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
     const productRepository: ProductRepository = {
       findAll: jest.fn(),
       findById: jest.fn(() => okAsync(product)),
+      decrementStock: jest.fn(),
     };
     const findOrCreateByEmail = jest.fn(() => okAsync(customer));
     const customerRepository: CustomerRepository = {
@@ -120,6 +121,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
       findById: jest.fn(),
       create: createTransaction,
       updateStatus: jest.fn(),
+      settleIfPending: jest.fn(),
     };
     const createDelivery = jest.fn(() => okAsync(delivery));
     const deliveryRepository: DeliveryRepository = {
@@ -180,6 +182,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
     const productRepository: ProductRepository = {
       findAll: jest.fn(),
       findById: jest.fn(() => okAsync(null)),
+      decrementStock: jest.fn(),
     };
     const customerRepository: CustomerRepository = {
       findById: jest.fn(),
@@ -195,6 +198,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
       findById: jest.fn(),
       create: jest.fn(),
       updateStatus: jest.fn(),
+      settleIfPending: jest.fn(),
     };
 
     const useCase = new CreateCheckoutTransactionUseCase(
@@ -217,6 +221,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
     const productRepository: ProductRepository = {
       findAll: jest.fn(),
       findById: jest.fn(() => okAsync(product)),
+      decrementStock: jest.fn(),
     };
     const customerRepository: CustomerRepository = {
       findById: jest.fn(),
@@ -232,6 +237,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
       findById: jest.fn(),
       create: jest.fn(),
       updateStatus: jest.fn(),
+      settleIfPending: jest.fn(),
     };
 
     const useCase = new CreateCheckoutTransactionUseCase(
@@ -257,6 +263,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
     const productRepository: ProductRepository = {
       findAll: jest.fn(),
       findById: jest.fn(() => okAsync(product)),
+      decrementStock: jest.fn(),
     };
     const customerRepository: CustomerRepository = {
       findById: jest.fn(),
@@ -272,6 +279,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
       findById: jest.fn(),
       create: jest.fn(),
       updateStatus: jest.fn(),
+      settleIfPending: jest.fn(),
     };
 
     const useCase = new CreateCheckoutTransactionUseCase(
@@ -294,6 +302,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
     const productRepository: ProductRepository = {
       findAll: jest.fn(),
       findById: jest.fn(() => okAsync(product)),
+      decrementStock: jest.fn(),
     };
     const customerRepository: CustomerRepository = {
       findById: jest.fn(),
@@ -310,6 +319,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
       findById: jest.fn(),
       create: createTransaction,
       updateStatus: jest.fn(),
+      settleIfPending: jest.fn(),
     };
 
     const useCase = new CreateCheckoutTransactionUseCase(
@@ -336,6 +346,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
     const productRepository: ProductRepository = {
       findAll: jest.fn(),
       findById: jest.fn(() => okAsync(product)),
+      decrementStock: jest.fn(),
     };
     const customerRepository: CustomerRepository = {
       findById: jest.fn(),
@@ -345,6 +356,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
       findById: jest.fn(),
       create: jest.fn(() => okAsync(transaction)),
       updateStatus: jest.fn(),
+      settleIfPending: jest.fn(),
     };
     const deliveryRepository: DeliveryRepository = {
       findById: jest.fn(),

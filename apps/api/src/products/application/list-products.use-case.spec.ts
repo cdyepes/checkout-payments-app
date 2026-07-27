@@ -22,6 +22,7 @@ describe('ListProductsUseCase', () => {
     const repository: ProductRepository = {
       findAll: jest.fn(() => okAsync(products)),
       findById: jest.fn(),
+      decrementStock: jest.fn(),
     };
     const useCase = new ListProductsUseCase(repository);
 
@@ -36,6 +37,7 @@ describe('ListProductsUseCase', () => {
     const repository: ProductRepository = {
       findAll: jest.fn(() => errAsync(error)),
       findById: jest.fn(),
+      decrementStock: jest.fn(),
     };
     const useCase = new ListProductsUseCase(repository);
 

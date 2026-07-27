@@ -23,4 +23,15 @@ export class PrismaProductRepository implements ProductRepository {
       (error) => new UnexpectedError(`Failed to fetch product ${id}: ${(error as Error).message}`),
     ).map((row) => (row ? ProductMapper.toDomain(row) : null));
   }
+
+  decrementStock(id: string, quantity: number): ResultAsync<boolean, DomainError> {
+    return ResultAsync.fromPromise(
+      this.prisma.client().product.updateMany({
+        where: { id, stock: { gte: quantity } },
+        data: { stock: { decrement: quantity } },
+      }),
+      (error) =>
+        new UnexpectedError(`Failed to decrement stock for product ${id}: ${(error as Error).message}`),
+    ).map((result) => result.count > 0);
+  }
 }
