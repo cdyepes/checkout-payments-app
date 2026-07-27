@@ -24,7 +24,7 @@ apps/
   web/           React SPA
 packages/
   contracts/     Shared Zod schemas + inferred TypeScript types
-infra/           IaC (added with the deployment iteration)
+infra/           CDK app (Lambda API + S3/CloudFront web, GitHub OIDC deploy role)
 ```
 
 ## Prerequisites
@@ -57,6 +57,15 @@ npm run test:cov   # runs both apps' Jest suites with the 80% coverage gate enfo
 _TODO — added once the transaction/delivery business rules are decided (next iteration)._
 The current schema (`apps/api/prisma/schema.prisma`) already models `Product`, `Customer`,
 `Transaction` and `Delivery`.
+
+## Deployment
+
+CDK stacks (Lambda + Function URL for the API, S3 + CloudFront for the SPA) deploy automatically
+on merge to `main` via GitHub Actions, authenticating to AWS through a GitHub OIDC role — no
+long-lived AWS keys in CI. See [`infra/README.md`](infra/README.md) for the one-time setup
+(CDK bootstrap, the OIDC role, GitHub secrets) and how the deploy pipeline works.
+
+Live URLs: _added once the first deploy completes._
 
 ## API documentation
 
