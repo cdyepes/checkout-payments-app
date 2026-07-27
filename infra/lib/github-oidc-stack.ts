@@ -39,13 +39,19 @@ export class GithubOidcStack extends cdk.Stack {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
         },
         StringLike: {
-          // Both forms point at the same repo/branch; a plain `push` job gets
-          // the ref-based sub, but a job with an `environment:` key (as
-          // deploy.yml has, for environment-scoped secrets) gets the
-          // environment-based one instead — see the doc comment above.
+          // Confirmed by decoding a real token (see deploy.yml history): this
+          // GitHub repo's sub claim is org@orgId/repo@repoId, not the plain
+          // org/repo the docs show — e.g.
+          // "repo:cdyepes@25647410/checkout-payments-app@1311469714:environment:Testing".
+          // The trailing "*" after each name absorbs the optional "@id"
+          // suffix so this keeps matching regardless of whether GitHub
+          // includes it. A job with an `environment:` key (as deploy.yml has,
+          // for environment-scoped secrets) gets the environment-based sub;
+          // a plain push job would get the ref-based one instead — both are
+          // accepted here.
           'token.actions.githubusercontent.com:sub': [
-            `repo:${props.githubOrg}/${props.githubRepo}:ref:refs/heads/main`,
-            `repo:${props.githubOrg}/${props.githubRepo}:environment:${props.githubEnvironment}`,
+            `repo:${props.githubOrg}*/${props.githubRepo}*:ref:refs/heads/main`,
+            `repo:${props.githubOrg}*/${props.githubRepo}*:environment:${props.githubEnvironment}`,
           ],
         },
       }),
