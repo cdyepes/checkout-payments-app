@@ -1,19 +1,7 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import type { CustomerInput, DeliveryInput } from '@checkout/contracts';
 
 export type CheckoutStep = 'product' | 'details' | 'summary' | 'status';
-
-export interface CheckoutCustomer {
-  email: string;
-  fullName: string;
-  phone: string;
-}
-
-export interface CheckoutDelivery {
-  addressLine: string;
-  city: string;
-  region: string;
-  country: string;
-}
 
 // Card number, expiry and CVV are intentionally absent from this state — they
 // live only in local component state for the moment it takes to tokenize them
@@ -22,8 +10,8 @@ export interface CheckoutState {
   step: CheckoutStep;
   productId: string | null;
   quantity: number;
-  customer: CheckoutCustomer | null;
-  delivery: CheckoutDelivery | null;
+  customer: CustomerInput | null;
+  delivery: DeliveryInput | null;
   transactionId: string | null;
 }
 
@@ -50,15 +38,18 @@ const checkoutSlice = createSlice({
     },
     setCustomerAndDelivery: (
       state,
-      action: PayloadAction<{ customer: CheckoutCustomer; delivery: CheckoutDelivery }>,
+      action: PayloadAction<{ customer: CustomerInput; delivery: DeliveryInput }>,
     ) => {
       state.customer = action.payload.customer;
       state.delivery = action.payload.delivery;
+    },
+    setTransactionId: (state, action: PayloadAction<string>) => {
+      state.transactionId = action.payload;
     },
     resetCheckout: () => initialState,
   },
 });
 
-export const { startCheckout, setStep, setCustomerAndDelivery, resetCheckout } =
+export const { startCheckout, setStep, setCustomerAndDelivery, setTransactionId, resetCheckout } =
   checkoutSlice.actions;
 export const checkoutReducer = checkoutSlice.reducer;

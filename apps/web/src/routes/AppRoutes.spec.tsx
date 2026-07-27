@@ -32,19 +32,22 @@ describe('AppRoutes', () => {
     expect(screen.getByTestId('checkout-details-form')).toBeInTheDocument();
   });
 
-  it('renders the summary placeholder at /checkout/summary', () => {
+  it('recovers to the details form when /checkout/summary is reached without a card token (e.g. a reload)', () => {
     renderWithStore(
       <AppRoutes />,
       { ...preloadedProductsState, checkout: { ...inProgressCheckout.checkout, step: 'summary' } },
       '/checkout/summary',
     );
-    expect(screen.getByText('Payment summary')).toBeInTheDocument();
+    expect(screen.getByTestId('checkout-details-form')).toBeInTheDocument();
   });
 
-  it('renders the status placeholder at /checkout/status', () => {
+  it('renders the status screen at /checkout/status when a transaction id is present', () => {
     renderWithStore(
       <AppRoutes />,
-      { ...preloadedProductsState, checkout: { ...inProgressCheckout.checkout, step: 'status' } },
+      {
+        ...preloadedProductsState,
+        checkout: { ...inProgressCheckout.checkout, step: 'status', transactionId: 'tx-1' },
+      },
       '/checkout/status',
     );
     expect(screen.getByText('Payment status')).toBeInTheDocument();
