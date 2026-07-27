@@ -120,13 +120,19 @@ describe('PrismaTransactionRepository', () => {
     const result = await repository.updateStatus('transaction-1', {
       status: 'APPROVED',
       providerStatus: 'APPROVED',
+      providerTransactionId: 'gw-tx-1',
       failureReason: null,
     });
 
     expect(result._unsafeUnwrap().status).toBe('APPROVED');
     expect(update).toHaveBeenCalledWith({
       where: { id: 'transaction-1' },
-      data: { status: 'APPROVED', providerStatus: 'APPROVED', failureReason: null },
+      data: {
+        status: 'APPROVED',
+        providerStatus: 'APPROVED',
+        providerTransactionId: 'gw-tx-1',
+        failureReason: null,
+      },
     });
   });
 
@@ -139,7 +145,66 @@ describe('PrismaTransactionRepository', () => {
     const result = await repository.updateStatus('transaction-1', {
       status: 'ERROR',
       providerStatus: null,
+      providerTransactionId: null,
       failureReason: 'timeout',
+    });
+
+    expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnexpectedError);
+  });
+
+  it('settleIfPending() applies the update and returns the settled row when still PENDING', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const findUnique = jest.fn().mockResolvedValue(buildRow({ status: 'APPROVED' }));
+    const prisma = buildPrisma({ transaction: { updateMany, findUnique } });
+    const repository = new PrismaTransactionRepository(prisma);
+
+    const result = await repository.settleIfPending('transaction-1', {
+      status: 'APPROVED',
+      providerStatus: 'APPROVED',
+      providerTransactionId: 'gw-tx-1',
+      failureReason: null,
+    });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 'transaction-1', status: 'PENDING' },
+      data: {
+        status: 'APPROVED',
+        providerStatus: 'APPROVED',
+        providerTransactionId: 'gw-tx-1',
+        failureReason: null,
+      },
+    });
+    expect(result._unsafeUnwrap()?.status).toBe('APPROVED');
+  });
+
+  it('settleIfPending() returns null when the transaction was already settled', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 0 });
+    const findUnique = jest.fn();
+    const prisma = buildPrisma({ transaction: { updateMany, findUnique } });
+    const repository = new PrismaTransactionRepository(prisma);
+
+    const result = await repository.settleIfPending('transaction-1', {
+      status: 'APPROVED',
+      providerStatus: 'APPROVED',
+      providerTransactionId: 'gw-tx-1',
+      failureReason: null,
+    });
+
+    expect(result._unsafeUnwrap()).toBeNull();
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it('settleIfPending() wraps a Prisma failure', async () => {
+    const prisma = buildPrisma({
+      transaction: { updateMany: jest.fn().mockRejectedValue(new Error('down')) },
+    });
+    const repository = new PrismaTransactionRepository(prisma);
+
+    const result = await repository.settleIfPending('transaction-1', {
+      status: 'APPROVED',
+      providerStatus: 'APPROVED',
+      providerTransactionId: 'gw-tx-1',
+      failureReason: null,
     });
 
     expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnexpectedError);
