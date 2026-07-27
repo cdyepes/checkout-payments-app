@@ -48,9 +48,17 @@ const checkoutSlice = createSlice({
     setStep: (state, action: PayloadAction<CheckoutStep>) => {
       state.step = action.payload;
     },
+    setCustomerAndDelivery: (
+      state,
+      action: PayloadAction<{ customer: CheckoutCustomer; delivery: CheckoutDelivery }>,
+    ) => {
+      state.customer = action.payload.customer;
+      state.delivery = action.payload.delivery;
+    },
     resetCheckout: () => initialState,
   },
 });
 
-export const { startCheckout, setStep, resetCheckout } = checkoutSlice.actions;
+export const { startCheckout, setStep, setCustomerAndDelivery, resetCheckout } =
+  checkoutSlice.actions;
 export const checkoutReducer = checkoutSlice.reducer;

@@ -1,4 +1,10 @@
-import { checkoutReducer, resetCheckout, setStep, startCheckout } from './checkout.slice';
+import {
+  checkoutReducer,
+  resetCheckout,
+  setCustomerAndDelivery,
+  setStep,
+  startCheckout,
+} from './checkout.slice';
 
 describe('checkoutReducer', () => {
   const initialState = checkoutReducer(undefined, { type: '@@INIT' });
@@ -38,6 +44,22 @@ describe('checkoutReducer', () => {
     const reset = checkoutReducer(started, resetCheckout());
 
     expect(reset).toEqual(initialState);
+  });
+
+  it('setCustomerAndDelivery records both without touching the rest of the state', () => {
+    const started = checkoutReducer(
+      initialState,
+      startCheckout({ productId: 'product-1', quantity: 2 }),
+    );
+    const customer = { email: 'jane@example.com', fullName: 'Jane Doe', phone: '+573001234567' };
+    const delivery = { addressLine: 'Calle 123', city: 'Bogotá', region: 'Cundinamarca', country: 'CO' };
+
+    const state = checkoutReducer(started, setCustomerAndDelivery({ customer, delivery }));
+
+    expect(state.customer).toEqual(customer);
+    expect(state.delivery).toEqual(delivery);
+    expect(state.step).toBe('details');
+    expect(state.productId).toBe('product-1');
   });
 
   it('never stores card fields in its shape', () => {

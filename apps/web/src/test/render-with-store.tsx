@@ -5,10 +5,12 @@ import { MemoryRouter } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
 import { rootReducer, type RootState } from '@/app/root-reducer';
 
+type RouteEntry = string | { pathname: string; state?: unknown };
+
 export function renderWithStore(
   ui: ReactElement,
   preloadedState?: Partial<RootState>,
-  route = '/',
+  route: RouteEntry = '/',
 ) {
   const store = configureStore({ reducer: rootReducer, preloadedState });
 

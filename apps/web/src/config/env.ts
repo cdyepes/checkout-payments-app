@@ -2,5 +2,6 @@
 // syntax: Jest maps this module to env.jest.ts instead of transforming it.
 export const env = {
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000',
+  paymentsApiUrl: import.meta.env.VITE_PAYMENTS_API_URL ?? '',
   paymentsPublicKey: import.meta.env.VITE_PAYMENTS_PUBLIC_KEY ?? '',
 };

@@ -1,17 +1,32 @@
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation, type Location } from 'react-router-dom';
 import { ProductPage } from '@/features/products/ProductPage';
-import { CheckoutPlaceholder } from '@/features/checkout/CheckoutPlaceholder';
+import { CheckoutModal } from '@/features/checkout/CheckoutModal';
+
+interface AppLocationState {
+  background?: Location;
+}
 
 export function AppRoutes() {
+  const location = useLocation();
+  const background = (location.state as AppLocationState | null)?.background;
+
   return (
-    <Routes>
-      <Route path="/" element={<ProductPage />} />
-      <Route
-        path="/checkout/details"
-        element={<CheckoutPlaceholder title="Card & delivery details" />}
-      />
-      <Route path="/checkout/summary" element={<CheckoutPlaceholder title="Payment summary" />} />
-      <Route path="/checkout/status" element={<CheckoutPlaceholder title="Payment status" />} />
-    </Routes>
+    <>
+      {/* Matched against the background location when one is set, so the product
+          page keeps rendering underneath the checkout modal instead of being
+          replaced by it. Deep-linking straight to a /checkout/* URL (no
+          background in history — e.g. a refresh) falls back to this same block
+          rendering CheckoutModal full-page. */}
+      <Routes location={background ?? location}>
+        <Route path="/" element={<ProductPage />} />
+        <Route path="/checkout/*" element={<CheckoutModal />} />
+      </Routes>
+
+      {background && (
+        <Routes>
+          <Route path="/checkout/*" element={<CheckoutModal />} />
+        </Routes>
+      )}
+    </>
   );
 }
