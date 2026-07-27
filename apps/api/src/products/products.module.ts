@@ -12,5 +12,6 @@ import { PrismaProductRepository } from './infrastructure/persistence/prisma-pro
     GetProductUseCase,
     { provide: PRODUCT_REPOSITORY, useClass: PrismaProductRepository },
   ],
+  exports: [PRODUCT_REPOSITORY],
 })
 export class ProductsModule {}

@@ -30,11 +30,43 @@ export class Delivery {
     return this.props.transactionId;
   }
 
+  get customerId(): string {
+    return this.props.customerId;
+  }
+
+  get addressLine(): string {
+    return this.props.addressLine;
+  }
+
+  get city(): string {
+    return this.props.city;
+  }
+
+  get region(): string {
+    return this.props.region;
+  }
+
+  get country(): string {
+    return this.props.country;
+  }
+
+  get postalCode(): string | null {
+    return this.props.postalCode;
+  }
+
   get status(): DeliveryStatus {
     return this.props.status;
   }
 
   get feeInCents(): number {
     return this.props.feeInCents;
+  }
+
+  get assignedProductId(): string | null {
+    return this.props.assignedProductId;
+  }
+
+  get quantity(): number {
+    return this.props.quantity;
   }
 }

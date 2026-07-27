@@ -12,14 +12,14 @@ export class PrismaProductRepository implements ProductRepository {
 
   findAll(): ResultAsync<Product[], DomainError> {
     return ResultAsync.fromPromise(
-      this.prisma.product.findMany({ orderBy: { createdAt: 'asc' } }),
+      this.prisma.client().product.findMany({ orderBy: { createdAt: 'asc' } }),
       (error) => new UnexpectedError(`Failed to list products: ${(error as Error).message}`),
     ).map((rows) => rows.map(ProductMapper.toDomain));
   }
 
   findById(id: string): ResultAsync<Product | null, DomainError> {
     return ResultAsync.fromPromise(
-      this.prisma.product.findUnique({ where: { id } }),
+      this.prisma.client().product.findUnique({ where: { id } }),
       (error) => new UnexpectedError(`Failed to fetch product ${id}: ${(error as Error).message}`),
     ).map((row) => (row ? ProductMapper.toDomain(row) : null));
   }

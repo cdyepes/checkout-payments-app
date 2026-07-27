@@ -1,0 +1,147 @@
+import { Transaction as PrismaTransaction } from '@prisma/client';
+import { UnexpectedError } from '../../../shared/domain/domain-error';
+import { PrismaService } from '../../../shared/infrastructure/prisma/prisma.service';
+import { PrismaTransactionRepository } from './prisma-transaction.repository';
+
+function buildRow(overrides: Partial<PrismaTransaction> = {}): PrismaTransaction {
+  return {
+    id: 'transaction-1',
+    reference: 'ref-1',
+    status: 'PENDING',
+    productId: 'product-1',
+    customerId: 'customer-1',
+    quantity: 2,
+    productAmountInCents: 200_000,
+    baseFeeInCents: 500_000,
+    deliveryFeeInCents: 800_000,
+    totalAmountInCents: 1_500_000,
+    currency: 'COP',
+    providerTransactionId: null,
+    providerStatus: null,
+    failureReason: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+function buildPrisma(client: Record<string, unknown>): PrismaService {
+  return { client: () => client } as unknown as PrismaService;
+}
+
+describe('PrismaTransactionRepository', () => {
+  it('findById() returns null when no row matches', async () => {
+    const prisma = buildPrisma({ transaction: { findUnique: jest.fn().mockResolvedValue(null) } });
+    const repository = new PrismaTransactionRepository(prisma);
+
+    const result = await repository.findById('missing');
+
+    expect(result._unsafeUnwrap()).toBeNull();
+  });
+
+  it('findById() maps a matching row', async () => {
+    const prisma = buildPrisma({
+      transaction: { findUnique: jest.fn().mockResolvedValue(buildRow()) },
+    });
+    const repository = new PrismaTransactionRepository(prisma);
+
+    const result = await repository.findById('transaction-1');
+
+    expect(result._unsafeUnwrap()?.id).toBe('transaction-1');
+  });
+
+  it('findById() wraps a Prisma failure', async () => {
+    const prisma = buildPrisma({
+      transaction: { findUnique: jest.fn().mockRejectedValue(new Error('down')) },
+    });
+    const repository = new PrismaTransactionRepository(prisma);
+
+    const result = await repository.findById('transaction-1');
+
+    expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnexpectedError);
+  });
+
+  it('create() persists and maps the created row', async () => {
+    const create = jest.fn().mockResolvedValue(buildRow({ id: 'transaction-2' }));
+    const prisma = buildPrisma({ transaction: { create } });
+    const repository = new PrismaTransactionRepository(prisma);
+    const props = {
+      reference: 'ref-2',
+      status: 'PENDING' as const,
+      productId: 'product-1',
+      customerId: 'customer-1',
+      quantity: 2,
+      productAmountInCents: 200_000,
+      baseFeeInCents: 500_000,
+      deliveryFeeInCents: 800_000,
+      totalAmountInCents: 1_500_000,
+      currency: 'COP',
+      providerTransactionId: null,
+      providerStatus: null,
+      failureReason: null,
+    };
+
+    const result = await repository.create(props);
+
+    expect(result._unsafeUnwrap().id).toBe('transaction-2');
+    expect(create).toHaveBeenCalledWith({ data: props });
+  });
+
+  it('create() wraps a Prisma failure', async () => {
+    const prisma = buildPrisma({
+      transaction: { create: jest.fn().mockRejectedValue(new Error('constraint violation')) },
+    });
+    const repository = new PrismaTransactionRepository(prisma);
+
+    const result = await repository.create({
+      reference: 'ref-2',
+      status: 'PENDING',
+      productId: 'product-1',
+      customerId: 'customer-1',
+      quantity: 2,
+      productAmountInCents: 200_000,
+      baseFeeInCents: 500_000,
+      deliveryFeeInCents: 800_000,
+      totalAmountInCents: 1_500_000,
+      currency: 'COP',
+      providerTransactionId: null,
+      providerStatus: null,
+      failureReason: null,
+    });
+
+    expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnexpectedError);
+  });
+
+  it('updateStatus() persists and maps the updated row', async () => {
+    const update = jest.fn().mockResolvedValue(buildRow({ status: 'APPROVED' }));
+    const prisma = buildPrisma({ transaction: { update } });
+    const repository = new PrismaTransactionRepository(prisma);
+
+    const result = await repository.updateStatus('transaction-1', {
+      status: 'APPROVED',
+      providerStatus: 'APPROVED',
+      failureReason: null,
+    });
+
+    expect(result._unsafeUnwrap().status).toBe('APPROVED');
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'transaction-1' },
+      data: { status: 'APPROVED', providerStatus: 'APPROVED', failureReason: null },
+    });
+  });
+
+  it('updateStatus() wraps a Prisma failure', async () => {
+    const prisma = buildPrisma({
+      transaction: { update: jest.fn().mockRejectedValue(new Error('not found')) },
+    });
+    const repository = new PrismaTransactionRepository(prisma);
+
+    const result = await repository.updateStatus('transaction-1', {
+      status: 'ERROR',
+      providerStatus: null,
+      failureReason: 'timeout',
+    });
+
+    expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnexpectedError);
+  });
+});

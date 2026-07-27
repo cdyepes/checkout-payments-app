@@ -27,7 +27,17 @@ describe('Transaction', () => {
     expect(transaction.id).toBe('transaction-1');
     expect(transaction.reference).toBe('ref-1');
     expect(transaction.status).toBe('PENDING');
+    expect(transaction.productId).toBe('product-1');
+    expect(transaction.customerId).toBe('customer-1');
+    expect(transaction.quantity).toBe(1);
+    expect(transaction.productAmountInCents).toBe(10000);
+    expect(transaction.baseFeeInCents).toBe(1000);
+    expect(transaction.deliveryFeeInCents).toBe(500);
     expect(transaction.totalAmountInCents).toBe(11500);
+    expect(transaction.currency).toBe('COP');
+    expect(transaction.providerTransactionId).toBeNull();
+    expect(transaction.providerStatus).toBeNull();
+    expect(transaction.failureReason).toBeNull();
   });
 
   describe('isSettled', () => {
