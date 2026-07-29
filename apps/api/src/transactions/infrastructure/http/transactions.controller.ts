@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TransactionResponse } from '@checkout/contracts';
 import { CreateCheckoutTransactionUseCase } from '../../application/create-checkout-transaction.use-case';
@@ -25,6 +26,7 @@ export class TransactionsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @ApiOperation({ summary: 'Create a PENDING checkout transaction' })
   @ApiCreatedResponse({ type: TransactionResponseDto })
   async create(@Body() body: CreateTransactionRequestDto): Promise<TransactionResponse> {
@@ -35,6 +37,7 @@ export class TransactionsController {
   }
 
   @Post(':id/payment')
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @ApiOperation({ summary: 'Submit a card token to charge a PENDING transaction' })
   @ApiOkResponse({ type: TransactionResponseDto })
   async submitPayment(
