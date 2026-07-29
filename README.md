@@ -89,7 +89,10 @@ Current coverage (`npm run test:cov`, both green against the 80% gate):
 The only building block shared across contexts is a small `UnitOfWork` port
 (`shared/domain/unit-of-work.ts`) wrapping `prisma.$transaction`, so the checkout use case can
 write Customer + Delivery + Transaction atomically without leaking Prisma into the application
-layer.
+layer. The port is `Result`-aware rather than a bare `Promise`: a domain `Err` returned mid-pipeline
+is rethrown as a sentinel so `prisma.$transaction` actually rolls back, then unwrapped back into an
+`Err` outside the transaction — a resolved-but-failed value would otherwise be indistinguishable
+from success to the underlying driver, and Prisma would commit the partial write.
 
 ### Checkout flow
 

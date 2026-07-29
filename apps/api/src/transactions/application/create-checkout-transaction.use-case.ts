@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { errAsync, okAsync, Result, ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { DomainError, NotFoundError } from '../../shared/domain/domain-error';
 import { UNIT_OF_WORK, UnitOfWork } from '../../shared/domain/unit-of-work';
 import {
@@ -46,11 +46,7 @@ export class CreateCheckoutTransactionUseCase {
   ) {}
 
   execute(command: CreateCheckoutTransactionCommand): ResultAsync<Transaction, DomainError> {
-    return new ResultAsync(
-      this.unitOfWork.run(async (): Promise<Result<Transaction, DomainError>> => {
-        return this.runPipeline(command);
-      }),
-    );
+    return this.unitOfWork.run(() => this.runPipeline(command));
   }
 
   private runPipeline(
