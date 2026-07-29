@@ -82,6 +82,9 @@ jobs:
 
           rm -f /tmp/env-vars.yaml
 
+      - name: Generate Prisma client
+        run: npm run db:generate -w @checkout/api
+
       - name: Run database migrations
         working-directory: apps/api
         env:
