@@ -11,6 +11,11 @@ export async function createApp(): Promise<NestExpressApplication> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService<Env, true>);
 
+  // Cloud Run sits behind Google's load balancer, which sets X-Forwarded-For;
+  // trust exactly one hop so req.ip (used by the rate limiter) reflects the
+  // real client instead of the LB, without trusting an arbitrarily-deep chain.
+  app.set('trust proxy', 1);
+
   app.use(helmet());
   app.enableCors({ origin: config.get('CORS_ORIGIN', { infer: true }), credentials: true });
   app.setGlobalPrefix('api');
