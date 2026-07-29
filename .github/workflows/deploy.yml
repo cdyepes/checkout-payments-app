@@ -113,6 +113,23 @@ jobs:
           VITE_PAYMENTS_PUBLIC_KEY: ${{ secrets.PAYMENTS_PUBLIC_KEY }}
         run: npm run build
 
+      - name: Pin CSP connect-src to the resolved Cloud Run origin
+        working-directory: apps/web
+        env:
+          API_URL: ${{ steps.outputs.outputs.api_url }}
+        run: |
+          # firebase.json ships with a wildcard (https://*.run.app) since the
+          # exact per-service hostname isn't known until after first deploy;
+          # now that it's resolved, swap in the literal origin so the CSP
+          # doesn't trust every Cloud Run service on the shared domain.
+          node -e "
+            const fs = require('fs');
+            const path = 'firebase.json';
+            const before = fs.readFileSync(path, 'utf8');
+            const after = before.replaceAll('https://*.run.app', process.env.API_URL);
+            fs.writeFileSync(path, after);
+          "
+
       - name: Deploy web app to Firebase Hosting
         working-directory: apps/web
         run: npx firebase-tools deploy --only hosting --project "$GCP_PROJECT_ID" --non-interactive

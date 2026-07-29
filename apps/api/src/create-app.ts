@@ -17,7 +17,10 @@ export async function createApp(): Promise<NestExpressApplication> {
   app.set('trust proxy', 1);
 
   app.use(helmet());
-  app.enableCors({ origin: config.get('CORS_ORIGIN', { infer: true }), credentials: true });
+  // No cookies/session auth anywhere in this API — the checkout flow is
+  // stateless (card token in, transaction id out) — so credentials stay off
+  // rather than opening a cross-origin credentialed-request surface nothing needs.
+  app.enableCors({ origin: config.get('CORS_ORIGIN', { infer: true }) });
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ZodValidationPipe());
 
