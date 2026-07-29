@@ -5,16 +5,16 @@ on:
     branches: [main]
 
 permissions:
-  id-token: write # required for the OIDC AWS role assumption
+  id-token: write # required for Workload Identity Federation
   contents: read
-
-env:
-  AWS_REGION: us-east-1
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: Testing
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ secrets.GCP_REGION }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,22 +29,25 @@ jobs:
       - name: Build contracts
         run: npm run build:contracts
 
-      - name: Install infra dependencies
-        run: npm ci
-        working-directory: infra
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Deploy WebStack (S3 + CloudFront)
-        working-directory: infra
-        run: npx cdk deploy WebStack --require-approval never --outputs-file web-outputs.json
+      - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Deploy ApiStack (Lambda + Function URL)
-        working-directory: infra
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: Build and push API image
+        run: |
+          IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/checkout-api/api:${{ github.sha }}"
+          docker build -f apps/api/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy API to Cloud Run
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PAYMENTS_API_URL: ${{ secrets.PAYMENTS_API_URL }}
@@ -52,7 +55,32 @@ jobs:
           PAYMENTS_PRIVATE_KEY: ${{ secrets.PAYMENTS_PRIVATE_KEY }}
           PAYMENTS_INTEGRITY_KEY: ${{ secrets.PAYMENTS_INTEGRITY_KEY }}
           PAYMENTS_EVENTS_KEY: ${{ secrets.PAYMENTS_EVENTS_KEY }}
-        run: npx cdk deploy ApiStack --require-approval never --outputs-file api-outputs.json
+        run: |
+          # Firebase Hosting's default URL is predictable (project-id.web.app),
+          # unlike CloudFront's randomly-generated domain — no chicken-and-egg
+          # ordering needed between the two deploys.
+          CORS_ORIGIN="https://${GCP_PROJECT_ID}.web.app"
+
+          cat > /tmp/env-vars.yaml <<EOF
+          NODE_ENV: "production"
+          CORS_ORIGIN: "${CORS_ORIGIN}"
+          DATABASE_URL: "${DATABASE_URL}"
+          PAYMENTS_API_URL: "${PAYMENTS_API_URL}"
+          PAYMENTS_PUBLIC_KEY: "${PAYMENTS_PUBLIC_KEY}"
+          PAYMENTS_PRIVATE_KEY: "${PAYMENTS_PRIVATE_KEY}"
+          PAYMENTS_INTEGRITY_KEY: "${PAYMENTS_INTEGRITY_KEY}"
+          PAYMENTS_EVENTS_KEY: "${PAYMENTS_EVENTS_KEY}"
+          EOF
+
+          gcloud run deploy checkout-api \
+            --image "$IMAGE" \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT_ID" \
+            --allow-unauthenticated \
+            --env-vars-file /tmp/env-vars.yaml \
+            --quiet
+
+          rm -f /tmp/env-vars.yaml
 
       - name: Run database migrations
         working-directory: apps/api
@@ -66,20 +94,13 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npx ts-node prisma/seed.ts
 
-      - name: Resolve stack outputs
+      - name: Resolve Cloud Run URL
         id: outputs
-        working-directory: infra
         run: |
-          API_URL=$(jq -r '.ApiStack.ApiUrl' api-outputs.json | sed 's:/*$::')
-          WEB_URL=$(jq -r '.WebStack.WebUrl' web-outputs.json)
-          BUCKET=$(jq -r '.WebStack.WebBucketName' web-outputs.json)
-          DISTRIBUTION_ID=$(jq -r '.WebStack.DistributionId' web-outputs.json)
-          {
-            echo "api_url=$API_URL"
-            echo "web_url=$WEB_URL"
-            echo "bucket=$BUCKET"
-            echo "distribution_id=$DISTRIBUTION_ID"
-          } >> "$GITHUB_OUTPUT"
+          API_URL=$(gcloud run services describe checkout-api \
+            --region "$GCP_REGION" --project "$GCP_PROJECT_ID" \
+            --format='value(status.url)')
+          echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
 
       - name: Build web app against the live API URL
         working-directory: apps/web
@@ -89,13 +110,11 @@ jobs:
           VITE_PAYMENTS_PUBLIC_KEY: ${{ secrets.PAYMENTS_PUBLIC_KEY }}
         run: npm run build
 
-      - name: Sync web build to S3
-        run: aws s3 sync apps/web/dist "s3://${{ steps.outputs.outputs.bucket }}" --delete
-
-      - name: Invalidate CloudFront cache
-        run: aws cloudfront create-invalidation --distribution-id "${{ steps.outputs.outputs.distribution_id }}" --paths '/*'
+      - name: Deploy web app to Firebase Hosting
+        working-directory: apps/web
+        run: npx firebase-tools deploy --only hosting --project "$GCP_PROJECT_ID" --non-interactive
 
       - name: Deployment summary
         run: |
           echo "API: ${{ steps.outputs.outputs.api_url }}"
-          echo "Web: ${{ steps.outputs.outputs.web_url }}"
+          echo "Web: https://${GCP_PROJECT_ID}.web.app"

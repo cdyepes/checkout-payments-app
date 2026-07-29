@@ -1,10 +1,9 @@
 generator client {
-  provider      = "prisma-client-js"
-  // "native" covers local dev; "rhel-openssl-3.0.x" is the correct target for
-  // AWS Lambda's Node.js runtime (Amazon Linux 2023 / OpenSSL 3.0) — the build
-  // image (Debian) and the Lambda runtime image differ, so relying on "native"
-  // resolution alone would bundle the wrong engine binary for production.
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  provider = "prisma-client-js"
+  // Cloud Run runs the exact image we build (no separate runtime base image
+  // the way Lambda's Docker packaging worked), so the build machine's
+  // "native" engine target is already correct for production — no
+  // cross-platform binaryTargets needed.
 }
 
 datasource db {

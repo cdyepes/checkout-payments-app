@@ -1,72 +1,62 @@
-# Deployment infrastructure
+# Deployment (GCP)
 
-A standalone CDK app (not an npm workspace member — its dependencies and lockfile are isolated
-from the rest of the monorepo). Three stacks:
-
-- **`GithubOidcStack`** — a GitHub OIDC provider + an IAM role GitHub Actions can assume, trusted
-  only for `push` to `main` on this exact repo. **Deployed once, by hand, with your own AWS
-  credentials** — nothing else can bootstrap this, since CI has no way to authenticate until this
-  role exists.
-- **`WebStack`** — private S3 bucket + CloudFront (Origin Access Control only, no public bucket
-  access) with a security-headers response policy and SPA-routing fallback.
-- **`ApiStack`** — the NestJS API as a Docker-image Lambda (`apps/api/Dockerfile`) behind a
-  Function URL.
-
-`WebStack` and `ApiStack` are deployed by `.github/workflows/deploy.yml` on every merge to `main`.
+- **API**: NestJS as a plain Docker container (`apps/api/Dockerfile`) on **Cloud Run**.
+- **Web**: the React SPA on **Firebase Hosting** (`apps/web/firebase.json`).
+- **CI/CD**: `.github/workflows/deploy.yml`, authenticating via Workload Identity Federation —
+  no long-lived service account keys stored anywhere.
 
 ## One-time setup
 
-You'll need an AWS account and the AWS CLI configured locally (`aws configure` or `aws sso login`)
-for these one-time steps — after this, deploys are fully automatic via CI and you won't need local
-AWS credentials again.
+You'll need `gcloud` authenticated locally (`gcloud auth login`) and a GCP project with billing
+enabled.
 
 ```bash
-cd infra
-npm install
-
-# 1. Bootstrap CDK in your account/region (creates the deploy/file-publishing/
-#    image-publishing/lookup roles the GitHub OIDC role will assume).
-npx cdk bootstrap aws://<your-account-id>/us-east-1
-
-# 2. Deploy the OIDC stack. This is the only stack you deploy by hand.
-npx cdk deploy GithubOidcStack
-
-# 3. Copy the "DeployRoleArn" output — you'll need it for the GitHub secret below.
+GCP_PROJECT_ID=<your-project-id> GITHUB_REPO=cdyepes/checkout-payments-app ./infra/setup-gcp.sh
 ```
 
-If you deploy to a region other than `us-east-1`, update `AWS_REGION` in
-`.github/workflows/deploy.yml` and the region in the bootstrap command above to match.
+This enables the required APIs, creates an Artifact Registry repository for the API's container
+images, creates a deploy service account with the minimum roles needed (Cloud Run, Artifact
+Registry, Firebase Hosting), and sets up Workload Identity Federation trusting GitHub's OIDC
+issuer, scoped to this exact repo.
 
-## GitHub repository secrets
-
-Add these under **Settings → Secrets and variables → Actions**:
+It prints four values at the end — add them as GitHub repository secrets (Settings → Secrets and
+variables → Actions):
 
 | Secret | Value |
 |---|---|
-| `AWS_DEPLOY_ROLE_ARN` | The `DeployRoleArn` output from step 3 above |
-| `DATABASE_URL` | Your Neon Postgres connection string (production database) |
-| `PAYMENTS_API_URL` | Same sandbox/UAT value as your local `.env` |
-| `PAYMENTS_PUBLIC_KEY` | Same as local `.env` |
-| `PAYMENTS_PRIVATE_KEY` | Same as local `.env` |
-| `PAYMENTS_INTEGRITY_KEY` | Same as local `.env` |
-| `PAYMENTS_EVENTS_KEY` | Same as local `.env` |
+| `GCP_PROJECT_ID` | Your project ID |
+| `GCP_REGION` | Region used (default `us-central1`) |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Printed by the script |
+| `GCP_SERVICE_ACCOUNT` | Printed by the script |
 
-No long-lived AWS access keys anywhere — the deploy role is assumed via OIDC per run.
+Also add the existing `DATABASE_URL` and `PAYMENTS_*` secrets if not already present (unchanged
+from before — same Neon connection string and sandbox/UAT payment keys).
+
+Then link the project to Firebase once (needed for Hosting):
+
+```bash
+npx firebase-tools projects:addfirebase <your-project-id>
+```
 
 ## What happens on merge to `main`
 
-`deploy.yml`: assumes the OIDC role → deploys `WebStack` (S3 + CloudFront) → deploys `ApiStack`
-(Lambda, with `CORS_ORIGIN` set to the just-created CloudFront domain) → runs
-`prisma migrate deploy` + the (idempotent) seed script against Neon → builds the web app with the
-real API URL baked in → syncs the build to S3 → invalidates the CloudFront cache.
+`deploy.yml`: authenticates via Workload Identity Federation → builds the API's Docker image and
+pushes it to Artifact Registry → deploys it to Cloud Run → runs `prisma migrate deploy` + the
+(idempotent) seed script against Neon → builds the web app with the live Cloud Run URL baked in
+→ deploys it to Firebase Hosting.
 
 ## Local commands
 
 ```bash
-npm run typecheck   # tsc --noEmit
-npm run synth       # cdk synth — validates the app, builds the Lambda Docker image locally
-npm run diff        # cdk diff — see what would change against the deployed stacks
+docker build -f apps/api/Dockerfile -t checkout-api:local .   # verify the image builds
+docker run --rm -p 8080:8080 -e DATABASE_URL=... checkout-api:local  # run it locally
 ```
 
-`cdk synth`/`diff`/`deploy` all need Docker running locally (the API stack's Lambda is a Docker
-image asset) and, for anything beyond `synth`, real AWS credentials in your environment.
+## Note on the earlier AWS attempt
+
+This project originally deployed to AWS (Lambda + Function URL for the API, S3 + CloudFront for
+the web tier), all built with CDK. That work is preserved in git history (see the "Iteration 6:
+Deployment" PR and follow-up OIDC debugging commits) but was abandoned after AWS's standard
+new-account verification hold on CloudFront went unresolved for several days — a manual-review
+gate unrelated to the code itself. GCP's equivalent services (Cloud Run, Firebase Hosting) don't
+have a comparable hold for this kind of usage.
