@@ -4,10 +4,25 @@ import {
   formatExpiryInput,
   isValidCardNumber,
   isValidExpiry,
+  maxDigitsForBrand,
+  maxFormattedLength,
   normalizeCardNumber,
   parseExpiry,
   passesLuhnCheck,
 } from './card';
+
+// Real, widely-documented test PANs, all Luhn-valid.
+const VISA_13 = '4222222222222';
+const MASTERCARD_16 = '5105105105105100';
+// Constructed (not a real issued number) purely to exercise the 19-digit Visa
+// branch: '4' + 17 zeros + a computed Luhn check digit.
+const VISA_19 = `4${'0'.repeat(17)}6`;
+// Same construction at 14 digits — not one of Visa's valid lengths (13/16/19) —
+// to prove length is checked independently of the Luhn digit sum.
+const VISA_14_LUHN_VALID = `4${'0'.repeat(12)}2`;
+// Constructed the same way, but with a Mastercard prefix, to prove a 19-digit
+// number is rejected by length even when Luhn passes — Mastercard is always 16.
+const MASTERCARD_19_LUHN_VALID = `51${'0'.repeat(16)}3`;
 
 describe('normalizeCardNumber', () => {
   it('strips everything but digits', () => {
@@ -24,8 +39,33 @@ describe('formatCardNumber', () => {
     expect(formatCardNumber('42424')).toBe('4242 4');
   });
 
-  it('truncates beyond 19 digits', () => {
+  it('truncates a Visa number at 19 digits', () => {
     expect(formatCardNumber('4242424242424242123456')).toBe('4242 4242 4242 4242 123');
+  });
+
+  it('truncates a Mastercard number at 16 digits, even if more were typed', () => {
+    expect(formatCardNumber(`${MASTERCARD_16}1234567`)).toBe('5105 1051 0510 5100');
+  });
+});
+
+describe('maxDigitsForBrand', () => {
+  it('is 19 for visa (13, 16 or 19-digit cards)', () => {
+    expect(maxDigitsForBrand('visa')).toBe(19);
+  });
+
+  it('is 16 for mastercard (always 16 digits)', () => {
+    expect(maxDigitsForBrand('mastercard')).toBe(16);
+  });
+
+  it('is 19 for an unrecognized brand (keeps the permissive range)', () => {
+    expect(maxDigitsForBrand('unknown')).toBe(19);
+  });
+});
+
+describe('maxFormattedLength', () => {
+  it('accounts for the grouping spaces on top of the digit count', () => {
+    expect(maxFormattedLength('mastercard')).toBe(19); // 16 digits + 3 spaces
+    expect(maxFormattedLength('visa')).toBe(23); // 19 digits + 4 spaces
   });
 });
 
@@ -82,7 +122,7 @@ describe('passesLuhnCheck', () => {
 });
 
 describe('isValidCardNumber', () => {
-  it('accepts a valid 16-digit card number', () => {
+  it('accepts a valid 16-digit Visa card number', () => {
     expect(isValidCardNumber('4242 4242 4242 4242')).toBe(true);
   });
 
@@ -92,6 +132,28 @@ describe('isValidCardNumber', () => {
 
   it('rejects a number that fails the Luhn check', () => {
     expect(isValidCardNumber('4242424242424241')).toBe(false);
+  });
+
+  it('accepts a 13-digit Visa card number', () => {
+    expect(isValidCardNumber(VISA_13)).toBe(true);
+  });
+
+  it('accepts a 19-digit Visa card number', () => {
+    expect(isValidCardNumber(VISA_19)).toBe(true);
+  });
+
+  it("rejects a 14-digit Visa number (not one of Visa's valid lengths), even though Luhn passes", () => {
+    expect(passesLuhnCheck(VISA_14_LUHN_VALID)).toBe(true);
+    expect(isValidCardNumber(VISA_14_LUHN_VALID)).toBe(false);
+  });
+
+  it('accepts a 16-digit Mastercard card number', () => {
+    expect(isValidCardNumber(MASTERCARD_16)).toBe(true);
+  });
+
+  it('rejects a 19-digit Mastercard number — Mastercard is always 16 — even though Luhn passes', () => {
+    expect(passesLuhnCheck(MASTERCARD_19_LUHN_VALID)).toBe(true);
+    expect(isValidCardNumber(MASTERCARD_19_LUHN_VALID)).toBe(false);
   });
 });
 

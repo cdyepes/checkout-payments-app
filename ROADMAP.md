@@ -5,7 +5,8 @@
 > multi-product cart — `Transaction.productId`/`quantity` became a `TransactionItem` line-items
 > table, and the frontend gained a `/cart` overlay. This document is left as-is below as the
 > historical record of what iterations 2–7 actually planned and shipped; see the git history and
-> `README.md` for the current (post-cart) shape.
+> `README.md` for the current (post-cart) shape. **Iterations 8–10, added after post-deployment
+> testing surfaced a correctness bug and a UX gap, are documented at the bottom of this file.**
 
 ## Context
 
@@ -161,3 +162,88 @@ OWASP alignment pass (rate limiting on transaction creation, CSP/security header
 audit), Postman collection export alongside the existing Swagger, README completion (data model
 diagram, coverage numbers, deployed links, architecture write-up), and a manual cross-browser /
 responsive check.
+
+---
+
+# Roadmap addendum — Iterations 8–10
+
+Iterations 1–7 above shipped and deployed the full test-brief scope. Using the live, deployed app
+surfaced three follow-ups: a real correctness bug in the transactional plumbing, the biggest
+remaining UX gap (no cart — one product per checkout), and two smaller polish items. Same process
+as before: one GitHub issue → one branch → one PR that closes it → stop for review.
+
+| # | Iteration | Branch | Status | Delivers |
+|---|---|---|---|---|
+| 8 | UnitOfWork rollback fix | `feat/unit-of-work-rollback` | **Shipped** (PR #14) | `UnitOfWork.run` made `Result`-aware so a mid-pipeline domain `Err` actually rolls back the Prisma transaction, instead of silently committing a partial write |
+| 9 | Multi-product shopping cart | `feat/shopping-cart` | **Shipped** (PR #16) | `TransactionItem` line-items table + migration/backfill, N-item checkout with fees charged once per cart, a `/cart` overlay, settlement-shortfall handling |
+| 10 | Checkout polish | `feat/checkout-polish` | Ready to build | Per-brand card length validation, responsive breakpoints above 480px |
+
+## Iteration 8 — UnitOfWork rollback fix (shipped)
+
+**Bug found**: `PrismaUnitOfWork.run` returned `prisma.$transaction(cb)` where `cb` resolved to a
+neverthrow `Result` — an `Err` is a *resolved value*, not a rejection, so Prisma committed the
+transaction regardless of the pipeline's outcome. Missed during iteration 2's live verification
+because both failure paths tested there (insufficient stock, product not found) short-circuit
+*before* any write.
+
+**Fix**: `UnitOfWork.run<T, E>(work: () => ResultAsync<T, E>): ResultAsync<T, E>` instead of a bare
+`Promise<T>`. The Prisma adapter throws a private `Rollback` sentinel when `work` resolves to `Err`,
+forcing `prisma.$transaction` to actually roll back, then unwraps the sentinel back into an `Err`
+outside the transaction. Verified by reproducing the bug against real local Postgres first (an
+orphaned transaction + customer row committed despite the `Err`), then confirming zero rows commit
+with the fix in place.
+
+## Iteration 9 — Multi-product shopping cart (shipped)
+
+**Goal**: replace single-product checkout with a real cart — one transaction carries N line items,
+the customer fills the card + delivery form once, and base + delivery fees are charged **once per
+cart**, not once per product.
+
+**Delivered**:
+- New `TransactionItem` line-items table with a **snapshotted `unitPriceInCents`** so a later
+  catalogue price change never rewrites a historical order. Drops `Transaction.productId`/`quantity`
+  and `Delivery.assignedProductId`/`quantity`, which items supersede.
+- A hand-edited migration (Prisma emits drops before creates, backwards for a backfill) that
+  backfills existing transactions into line items from the *historical order total*, guarded by SQL
+  assertions that abort the whole migration on any mismatch — verified against real local Postgres
+  data before merge.
+- `CreateCheckoutTransactionUseCase` batch-loads products and folds a per-line stock/existence
+  check; duplicate or empty `items` are rejected in zod before reaching the use case.
+- `ReconcileTransactionUseCase.settleApproved` decrements every line (sorted by `productId` to avoid
+  deadlocking a concurrent settlement) and only marks the delivery `ASSIGNED` if every line
+  succeeds. If one line is short at settlement, the transaction **stays `APPROVED`** (the card was
+  already charged) with `failureReason` naming the product(s) — not rolled back, not reported as a
+  payment failure that didn't happen.
+- Frontend: a `cart` slice holding only `{productId, quantity}` (prices always come live from the
+  product catalogue), a `/cart` overlay reusing the background-location + Modal/Backdrop pattern,
+  `ProductCard`'s "Buy" → "Add to cart". Cart persists across a refresh and clears only on an
+  `APPROVED` settlement, so a declined card leaves it intact to retry.
+- `deploy.yml` reordered to migrate before deploying the new Cloud Run revision, since this schema
+  change isn't compatible with the old code running against the new schema (or vice versa).
+
+**Verified**: multi-item fee math against real Postgres, `400`s on empty/duplicate items, a `409`
+naming the *correct* product on insufficient stock, zero rows committed on every rejected request,
+and full browser walkthroughs against the real Wompi sandbox of both an approved and a declined
+multi-item purchase. Caught and fixed one real bug along the way (a direct `/cart` load never
+fetched the product catalogue) and one more from post-merge device testing: the cart/checkout
+overlay's backdrop wrapper had no explicit width, so `.panel`'s `width: 100%` had nothing definite
+to resolve against and overflowed on narrow viewports, clipping content at both edges — fixed by
+giving the wrapper a real `width: 100%` + `min-width: 0`.
+
+## Iteration 10 — Checkout polish (ready to build)
+
+**Goal**: two small, unrelated polish items noticed during manual testing of the deployed app.
+
+1. **Per-brand card length** (`apps/web/src/lib/card.ts`). Today `formatCardNumber` caps at 19
+   digits and `isValidCardNumber` accepts any Luhn-valid length 13–19, for every brand — so a
+   16-digit Mastercard can still be typed out to 19 digits. Visa genuinely issues 13/16/19-digit
+   cards, so a blanket cap would be wrong; the fix is per-brand length tables, checked against the
+   brand `detectCardBrand` already returns from the number's prefix.
+2. **Responsive pass**. `--max-content-width: 480px` on `.app-shell` caps every screen at mobile
+   width regardless of viewport, and the product grid only ever reaches 2 columns. Add real
+   breakpoints (480 → 768 → 1100px) so the grid goes 1→2→3 columns and the shell uses the extra
+   space on tablet/desktop, and audit 320–414px for overflow/tap-target issues — the same class of
+   bug iteration 9 already found and fixed once in the cart/checkout overlays.
+
+**Verification**: Chrome DevTools/emulation at 320/375/414/768/1024/1280px, screenshotting the
+product grid, cart panel, checkout form, summary, and status screens at each breakpoint.
