@@ -1,9 +1,9 @@
 # Checkout Payments App
 
 A mobile-first checkout SPA (React + Redux) backed by a NestJS API, built around Hexagonal
-Architecture / Ports & Adapters and Railway Oriented Programming, integrating real
-[Wompi](https://wompi.co) sandbox payments end to end: browse products, pay with a tokenized
-card, and watch stock settle live.
+Architecture / Ports & Adapters and Railway Oriented Programming, integrating a real payment
+provider's sandbox end to end: browse products, pay with a tokenized card, and watch stock
+settle live.
 
 **Live**: [checkout-app-503917.web.app](https://checkout-app-503917.web.app) · API:
 [checkout-api-grnxwqyaaq-uc.a.run.app/api/products](https://checkout-api-grnxwqyaaq-uc.a.run.app/api/products)
@@ -51,9 +51,9 @@ npm run dev:api   # http://localhost:3000/api, Swagger at /docs
 npm run dev:web   # http://localhost:5173
 ```
 
-`.env.example` documents every variable, including a sandbox Wompi key quartet — register at
-Wompi's merchant portal for your own, or use the ones already deployed to production (referenced
-in the GitHub Actions secrets, not in this file).
+`.env.example` documents every variable, including a sandbox payment-provider key quartet —
+register at the provider's merchant portal for your own, or use the ones already deployed to
+production (referenced in the GitHub Actions secrets, not in this file).
 
 ## Testing
 
@@ -65,8 +65,8 @@ Current coverage (`npm run test:cov`, both green against the 80% gate):
 
 | | Statements | Branches | Functions | Lines | Tests |
 |---|---|---|---|---|---|
-| **API** (`@checkout/api`) | 99.58% | 96.82% | 99.00% | 99.54% | 123 |
-| **Web** (`@checkout/web`) | 95.39% | 89.31% | 94.36% | 96.90% | 95 |
+| **API** (`@checkout/api`) | 99.61% | 97.05% | 99.09% | 99.57% | 141 |
+| **Web** (`@checkout/web`) | 95.91% | 90.25% | 94.59% | 96.92% | 138 |
 
 ## Architecture
 
@@ -83,8 +83,8 @@ Current coverage (`npm run test:cov`, both green against the 80% gate):
   failures like "insufficient stock" or "transaction not found" are values, not exceptions; a
   single `domain-error.mapper.ts` translates them to HTTP status codes at the edge).
 - **`infrastructure/`** — adapters: Prisma repositories implementing the domain's repository
-  ports, NestJS controllers, and (for `payments`) the real HTTP adapter to Wompi's API
-  implementing the `PaymentGateway` port.
+  ports, NestJS controllers, and (for `payments`) the real HTTP adapter to the payment
+  provider's API implementing the `PaymentGateway` port.
 
 The only building block shared across contexts is a small `UnitOfWork` port
 (`shared/domain/unit-of-work.ts`) wrapping `prisma.$transaction`, so the checkout use case can
@@ -106,14 +106,15 @@ many line items it contains.
    for the whole cart), finds-or-creates the Customer by email, and creates a `PENDING`
    Transaction + its `TransactionItem` line items + Delivery atomically. Each line snapshots
    `unitPriceInCents` at checkout time, so a later catalogue price change never rewrites a past
-   order's total. `reference` is the transaction's own UUID (globally unique, as Wompi requires).
+   order's total. `reference` is the transaction's own UUID (globally unique, as the provider
+   requires).
 2. **`POST /api/transactions/:id/payment`** — takes a card token (tokenized directly
-   browser → Wompi with the *public* key; our API never sees a PAN), fetches Wompi's acceptance
-   token, computes the integrity signature server-side
+   browser → the provider with the *public* key; our API never sees a PAN), fetches the
+   provider's acceptance token, computes the integrity signature server-side
    (`SHA256(reference + amount_in_cents + currency + integrity_secret)` — the secret never
    reaches the browser), and charges the card with the *private* key.
-3. **`GET /api/transactions/:id`** — reconciles on read: if still `PENDING`, polls Wompi's
-   status and applies a settled outcome exactly once (status update, delivery assignment,
+3. **`GET /api/transactions/:id`** — reconciles on read: if still `PENDING`, polls the
+   provider's status and applies a settled outcome exactly once (status update, delivery assignment,
    conditional stock decrement via `UPDATE ... WHERE stock >= quantity` per line so it can never
    go negative). If the payment is approved but one or more lines have since run out of stock,
    the transaction stays `APPROVED` (the card was already charged) and `failureReason` names the

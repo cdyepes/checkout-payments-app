@@ -10,7 +10,11 @@ coverage/
 .turbo/
 *.tsbuildinfo
 
-# test brief and scratch notes — never enter the public repo
+# test brief and scratch notes — never enter the public repo.
+# Root-level markdown is ignored by default (planning/scratch files land here),
+# with an explicit allowlist for the docs that are meant to be public.
 *.pdf
 reasons.txt
-wompi-fullstack-test-pdf-*.md
+/*.md
+!/README.md
+!/ROADMAP.md

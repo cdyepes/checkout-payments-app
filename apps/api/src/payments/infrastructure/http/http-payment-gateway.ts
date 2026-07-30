@@ -11,14 +11,14 @@ import {
   PaymentGateway,
 } from '../../domain/payment-gateway.port';
 
-interface WompiMerchantResponse {
+interface ProviderMerchantResponse {
   data: {
     presigned_acceptance: { acceptance_token: string };
     presigned_personal_data_auth?: { acceptance_token: string };
   };
 }
 
-interface WompiTransactionResponse {
+interface ProviderTransactionResponse {
   data: { id: string; status: GatewayTransactionStatus };
 }
 
@@ -48,7 +48,7 @@ export class HttpPaymentGateway implements PaymentGateway {
     return ResultAsync.fromPromise(
       fetch(`${this.baseUrl}/transactions/${gatewayTransactionId}`, {
         headers: { Authorization: `Bearer ${this.publicKey}` },
-      }).then((response) => this.parseJson<WompiTransactionResponse>(response)),
+      }).then((response) => this.parseJson<ProviderTransactionResponse>(response)),
       (error) => this.toGatewayError('Failed to fetch transaction status', error),
     ).map((body) => ({ id: body.data.id, status: body.data.status }));
   }
@@ -59,7 +59,7 @@ export class HttpPaymentGateway implements PaymentGateway {
   > {
     return ResultAsync.fromPromise(
       fetch(`${this.baseUrl}/merchants/${this.publicKey}`).then((response) =>
-        this.parseJson<WompiMerchantResponse>(response),
+        this.parseJson<ProviderMerchantResponse>(response),
       ),
       (error) => this.toGatewayError('Failed to fetch acceptance token', error),
     ).map((body) => ({
@@ -93,7 +93,7 @@ export class HttpPaymentGateway implements PaymentGateway {
           signature,
           payment_method: { type: 'CARD', token: command.cardToken, installments: 1 },
         }),
-      }).then((response) => this.parseJson<WompiTransactionResponse>(response)),
+      }).then((response) => this.parseJson<ProviderTransactionResponse>(response)),
       (error) => this.toGatewayError('Failed to create gateway transaction', error),
     ).map((body) => ({ id: body.data.id, status: body.data.status }));
   }

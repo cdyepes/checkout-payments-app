@@ -223,7 +223,7 @@ cart**, not once per product.
 
 **Verified**: multi-item fee math against real Postgres, `400`s on empty/duplicate items, a `409`
 naming the *correct* product on insufficient stock, zero rows committed on every rejected request,
-and full browser walkthroughs against the real Wompi sandbox of both an approved and a declined
+and full browser walkthroughs against the real payment-provider sandbox of both an approved and a declined
 multi-item purchase. Caught and fixed one real bug along the way (a direct `/cart` load never
 fetched the product catalogue) and one more from post-merge device testing: the cart/checkout
 overlay's backdrop wrapper had no explicit width, so `.panel`'s `width: 100%` had nothing definite

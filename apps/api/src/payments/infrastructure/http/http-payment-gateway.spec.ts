@@ -6,7 +6,7 @@ import { HttpPaymentGateway } from './http-payment-gateway';
 
 function buildConfig(overrides: Partial<Env> = {}): ConfigService<Env, true> {
   const values: Partial<Env> = {
-    PAYMENTS_API_URL: 'https://sandbox.wompi.co/v1',
+    PAYMENTS_API_URL: 'https://sandbox.payment-provider.example/v1',
     PAYMENTS_PUBLIC_KEY: 'pub_test_key',
     PAYMENTS_PRIVATE_KEY: 'prv_test_key',
     PAYMENTS_INTEGRITY_KEY: 'test_integrity_key',
@@ -60,11 +60,11 @@ describe('HttpPaymentGateway', () => {
 
       expect(fetchMock).toHaveBeenNthCalledWith(
         1,
-        'https://sandbox.wompi.co/v1/merchants/pub_test_key',
+        'https://sandbox.payment-provider.example/v1/merchants/pub_test_key',
       );
 
       const [transactionsUrl, requestInit] = fetchMock.mock.calls[1] as [string, RequestInit];
-      expect(transactionsUrl).toBe('https://sandbox.wompi.co/v1/transactions');
+      expect(transactionsUrl).toBe('https://sandbox.payment-provider.example/v1/transactions');
       expect(requestInit.method).toBe('POST');
       expect(requestInit.headers).toMatchObject({ Authorization: 'Bearer prv_test_key' });
 
@@ -143,7 +143,7 @@ describe('HttpPaymentGateway', () => {
 
       expect(result.isOk()).toBe(true);
       expect(result._unsafeUnwrap()).toEqual({ id: 'gw-tx-1', status: 'APPROVED' });
-      expect(fetchMock).toHaveBeenCalledWith('https://sandbox.wompi.co/v1/transactions/gw-tx-1', {
+      expect(fetchMock).toHaveBeenCalledWith('https://sandbox.payment-provider.example/v1/transactions/gw-tx-1', {
         headers: { Authorization: 'Bearer pub_test_key' },
       });
     });
