@@ -1,12 +1,24 @@
 export type TransactionStatus = 'PENDING' | 'APPROVED' | 'DECLINED' | 'ERROR' | 'VOIDED';
 
+/**
+ * A line item of the Transaction aggregate. `unitPriceInCents` is snapshotted at
+ * checkout time so a later catalogue price change never rewrites a historical order.
+ * Deliberately has no `id`: the database row needs a primary key, the domain does not —
+ * (transactionId, productId) is unique, so nothing ever addresses a line by surrogate id.
+ */
+export interface TransactionItem {
+  readonly productId: string;
+  readonly quantity: number;
+  readonly unitPriceInCents: number;
+  readonly subtotalInCents: number;
+}
+
 export interface TransactionProps {
   id: string;
   reference: string;
   status: TransactionStatus;
-  productId: string;
   customerId: string;
-  quantity: number;
+  items: readonly TransactionItem[];
   productAmountInCents: number;
   baseFeeInCents: number;
   deliveryFeeInCents: number;
@@ -36,16 +48,12 @@ export class Transaction {
     return this.props.status;
   }
 
-  get productId(): string {
-    return this.props.productId;
-  }
-
   get customerId(): string {
     return this.props.customerId;
   }
 
-  get quantity(): number {
-    return this.props.quantity;
+  get items(): readonly TransactionItem[] {
+    return this.props.items;
   }
 
   get productAmountInCents(): number {

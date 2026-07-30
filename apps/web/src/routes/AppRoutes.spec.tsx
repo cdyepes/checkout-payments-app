@@ -9,12 +9,11 @@ const preloadedProductsState = {
 const inProgressCheckout = {
   checkout: {
     step: 'details' as const,
-    productId: 'product-1',
-    quantity: 1,
     customer: null,
     delivery: null,
     transactionId: null,
   },
+  cart: { items: [{ productId: 'product-1', quantity: 1 }] },
 };
 
 describe('AppRoutes', () => {
@@ -35,7 +34,11 @@ describe('AppRoutes', () => {
   it('recovers to the details form when /checkout/summary is reached without a card token (e.g. a reload)', () => {
     renderWithStore(
       <AppRoutes />,
-      { ...preloadedProductsState, checkout: { ...inProgressCheckout.checkout, step: 'summary' } },
+      {
+        ...preloadedProductsState,
+        checkout: { ...inProgressCheckout.checkout, step: 'summary' },
+        cart: inProgressCheckout.cart,
+      },
       '/checkout/summary',
     );
     expect(screen.getByTestId('checkout-details-form')).toBeInTheDocument();
@@ -47,6 +50,7 @@ describe('AppRoutes', () => {
       {
         ...preloadedProductsState,
         checkout: { ...inProgressCheckout.checkout, step: 'status', transactionId: 'tx-1' },
+        cart: inProgressCheckout.cart,
       },
       '/checkout/status',
     );
@@ -70,5 +74,25 @@ describe('AppRoutes', () => {
 
     expect(screen.getByText('Store')).toBeInTheDocument();
     expect(screen.getByTestId('checkout-details-form')).toBeInTheDocument();
+  });
+
+  it('renders the cart panel at /cart', () => {
+    renderWithStore(
+      <AppRoutes />,
+      { ...preloadedProductsState, cart: { items: [] } },
+      '/cart',
+    );
+    expect(screen.getByTestId('cart-panel')).toBeInTheDocument();
+  });
+
+  it('keeps the product page rendered underneath the cart panel as a background-location overlay', () => {
+    renderWithStore(
+      <AppRoutes />,
+      { ...preloadedProductsState, cart: { items: [] } },
+      { pathname: '/cart', state: { background: { pathname: '/' } } },
+    );
+
+    expect(screen.getByText('Store')).toBeInTheDocument();
+    expect(screen.getByTestId('cart-panel')).toBeInTheDocument();
   });
 });

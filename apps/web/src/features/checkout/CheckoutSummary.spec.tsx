@@ -17,10 +17,9 @@ const product = buildProduct({ id: 'product-1', priceInCents: 100_000, currency:
 function buildPreloadedState(overrides: Record<string, unknown> = {}) {
   return {
     products: { items: [product], status: 'succeeded' as const, error: null },
+    cart: { items: [{ productId: 'product-1', quantity: 2 }] },
     checkout: {
       step: 'summary' as const,
-      productId: 'product-1',
-      quantity: 2,
       customer: { email: 'jane@example.com', fullName: 'Jane Doe', phone: '+573001234567' },
       delivery: { addressLine: 'Calle 123', city: 'Bogotá', region: 'Cundinamarca', country: 'CO' },
       transactionId: null,
@@ -34,9 +33,10 @@ function buildTransaction(overrides: Record<string, unknown> = {}) {
     id: 'tx-1',
     reference: 'ref-1',
     status: 'PENDING',
-    productId: 'product-1',
     customerId: 'customer-1',
-    quantity: 2,
+    items: [
+      { productId: 'product-1', quantity: 2, unitPriceInCents: 100_000, subtotalInCents: 200_000 },
+    ],
     productAmountInCents: 200_000,
     baseFeeInCents: 500_000,
     deliveryFeeInCents: 800_000,
@@ -54,11 +54,12 @@ describe('CheckoutSummary', () => {
     postJson.mockReset();
   });
 
-  it('shows a loading message until the product is available', () => {
-    renderWithStore(
-      <CheckoutSummary cardToken="tok_test_1" onSubmitted={jest.fn()} />,
-      { products: { items: [], status: 'loading', error: null }, checkout: buildPreloadedState().checkout },
-    );
+  it('shows a loading message until the products are available', () => {
+    renderWithStore(<CheckoutSummary cardToken="tok_test_1" onSubmitted={jest.fn()} />, {
+      products: { items: [], status: 'loading', error: null },
+      cart: buildPreloadedState().cart,
+      checkout: buildPreloadedState().checkout,
+    });
 
     expect(screen.getByText(/loading summary/i)).toBeInTheDocument();
   });
@@ -74,6 +75,33 @@ describe('CheckoutSummary', () => {
     expect(screen.getByText('$ 5.000')).toBeInTheDocument();
     expect(screen.getByText('$ 8.000')).toBeInTheDocument();
     expect(screen.getByText('$ 15.000')).toBeInTheDocument();
+  });
+
+  it('renders one row per cart line and charges the flat fees only once for a multi-item cart', () => {
+    const headphones = buildProduct({
+      id: 'product-2',
+      name: 'Headphones',
+      priceInCents: 50_000,
+      currency: 'COP',
+    });
+    renderWithStore(<CheckoutSummary cardToken="tok_test_1" onSubmitted={jest.fn()} />, {
+      products: { items: [product, headphones], status: 'succeeded', error: null },
+      cart: {
+        items: [
+          { productId: 'product-1', quantity: 2 },
+          { productId: 'product-2', quantity: 1 },
+        ],
+      },
+      checkout: buildPreloadedState().checkout,
+    });
+
+    expect(screen.getByText(/Keyboard × 2/)).toBeInTheDocument();
+    expect(screen.getByText(/Headphones × 1/)).toBeInTheDocument();
+    expect(screen.getByText('$ 2.000')).toBeInTheDocument(); // keyboard subtotal
+    expect(screen.getByText('$ 500')).toBeInTheDocument(); // headphones subtotal
+    expect(screen.getByText('$ 5.000')).toBeInTheDocument(); // base fee, once
+    expect(screen.getByText('$ 8.000')).toBeInTheDocument(); // delivery fee, once
+    expect(screen.getByText('$ 15.500')).toBeInTheDocument(); // 2.000 + 500 + 5.000 + 8.000
   });
 
   it('creates the transaction, submits payment, and calls onSubmitted with the transaction id', async () => {
@@ -92,8 +120,7 @@ describe('CheckoutSummary', () => {
       1,
       '/transactions',
       {
-        productId: 'product-1',
-        quantity: 2,
+        items: [{ productId: 'product-1', quantity: 2 }],
         customer: { email: 'jane@example.com', fullName: 'Jane Doe', phone: '+573001234567' },
         delivery: { addressLine: 'Calle 123', city: 'Bogotá', region: 'Cundinamarca', country: 'CO' },
       },

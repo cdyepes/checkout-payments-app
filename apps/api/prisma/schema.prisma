@@ -22,7 +22,7 @@ model Product {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  transactions  Transaction[]
+  transactionItems TransactionItem[]
 
   @@map("products")
 }
@@ -55,12 +55,11 @@ model Transaction {
   reference              String            @unique
   status                 TransactionStatus @default(PENDING)
 
-  productId              String
-  product                Product           @relation(fields: [productId], references: [id])
   customerId             String
   customer               Customer          @relation(fields: [customerId], references: [id])
 
-  quantity               Int
+  items                  TransactionItem[]
+
   productAmountInCents   Int
   baseFeeInCents         Int
   deliveryFeeInCents     Int
@@ -77,6 +76,26 @@ model Transaction {
   updatedAt              DateTime          @updatedAt
 
   @@map("transactions")
+}
+
+model TransactionItem {
+  id               String      @id @default(uuid())
+
+  transactionId    String
+  transaction      Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  productId        String
+  product          Product     @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  quantity         Int
+  unitPriceInCents Int
+  subtotalInCents  Int
+
+  createdAt        DateTime    @default(now())
+
+  @@unique([transactionId, productId])
+  @@index([productId])
+  @@map("transaction_items")
 }
 
 enum DeliveryStatus {
@@ -100,8 +119,6 @@ model Delivery {
 
   feeInCents        Int
   status            DeliveryStatus @default(PENDING)
-  assignedProductId String?
-  quantity          Int
 
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt

@@ -16,8 +16,6 @@ function buildDelivery(id: string) {
     postalCode: null,
     feeInCents: 800000,
     status: 'PENDING',
-    assignedProductId: null,
-    quantity: 1,
   });
 }
 
@@ -26,7 +24,7 @@ function buildRepository(overrides: Partial<DeliveryRepository> = {}): DeliveryR
     findById: jest.fn(),
     findByTransactionId: jest.fn(),
     create: jest.fn(),
-    assignProduct: jest.fn(),
+    markAssigned: jest.fn(),
     ...overrides,
   };
 }

@@ -22,7 +22,7 @@ export const DeliveryResponseSchema = z.object({
   postalCode: z.string().nullable(),
   feeInCents: z.number().int().nonnegative(),
   status: DeliveryStatusSchema,
-  quantity: z.number().int().positive(),
+  // `quantity` removed: what's being delivered now lives on the transaction's items.
 });
 export type DeliveryResponse = z.infer<typeof DeliveryResponseSchema>;
 

@@ -29,6 +29,28 @@ jobs:
       - name: Build contracts
         run: npm run build:contracts
 
+      # Migrations run before the new API revision is deployed: a breaking schema
+      # change means the old ordering (deploy, then migrate) would serve the new
+      # code against the old schema for the whole deploy window. Migrating first
+      # narrows the broken window to "old revision + new schema" (only writes that
+      # rely on now-dropped columns fail) instead of "new revision + old schema"
+      # (reads fail too, e.g. `include: { items: true }` against a table that
+      # doesn't exist yet).
+      - name: Generate Prisma client
+        run: npm run db:generate -w @checkout/api
+
+      - name: Run database migrations
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma migrate deploy
+
+      - name: Seed products (idempotent — safe to run on every deploy)
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx ts-node prisma/seed.ts
+
       - name: Authenticate to GCP (Workload Identity Federation)
         uses: google-github-actions/auth@v2
         with:
@@ -81,21 +103,6 @@ jobs:
             --quiet
 
           rm -f /tmp/env-vars.yaml
-
-      - name: Generate Prisma client
-        run: npm run db:generate -w @checkout/api
-
-      - name: Run database migrations
-        working-directory: apps/api
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx prisma migrate deploy
-
-      - name: Seed products (idempotent — safe to run on every deploy)
-        working-directory: apps/api
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx ts-node prisma/seed.ts
 
       - name: Resolve Cloud Run URL
         id: outputs

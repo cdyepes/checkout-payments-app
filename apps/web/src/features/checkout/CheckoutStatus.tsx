@@ -8,7 +8,7 @@ const MAX_POLL_ATTEMPTS = 30;
 
 export interface CheckoutStatusProps {
   transactionId: string;
-  onDone: () => void;
+  onDone: (settledStatus: TransactionResponse['status']) => void;
 }
 
 const RESULT_COPY: Record<string, { title: string; tone: 'success' | 'failure' }> = {
@@ -91,8 +91,18 @@ export function CheckoutStatus({ transactionId, onDone }: CheckoutStatusProps) {
         </div>
       )}
 
-      {(isSettled || timedOut) && (
-        <button type="button" className={styles.continueButton} onClick={onDone}>
+      {isSettled && transaction && (
+        <button
+          type="button"
+          className={styles.continueButton}
+          onClick={() => onDone(transaction.status)}
+        >
+          Continue shopping
+        </button>
+      )}
+
+      {timedOut && !isSettled && (
+        <button type="button" className={styles.continueButton} onClick={() => onDone('PENDING')}>
           Continue shopping
         </button>
       )}

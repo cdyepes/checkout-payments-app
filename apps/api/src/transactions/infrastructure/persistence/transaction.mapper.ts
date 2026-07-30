@@ -1,15 +1,24 @@
-import { Transaction as PrismaTransaction } from '@prisma/client';
+import {
+  Transaction as PrismaTransaction,
+  TransactionItem as PrismaTransactionItem,
+} from '@prisma/client';
 import { Transaction } from '../../domain/transaction.entity';
 
+export type TransactionRow = PrismaTransaction & { items: PrismaTransactionItem[] };
+
 export class TransactionMapper {
-  static toDomain(row: PrismaTransaction): Transaction {
+  static toDomain(row: TransactionRow): Transaction {
     return Transaction.fromPersistence({
       id: row.id,
       reference: row.reference,
       status: row.status,
-      productId: row.productId,
       customerId: row.customerId,
-      quantity: row.quantity,
+      items: row.items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPriceInCents: item.unitPriceInCents,
+        subtotalInCents: item.subtotalInCents,
+      })),
       productAmountInCents: row.productAmountInCents,
       baseFeeInCents: row.baseFeeInCents,
       deliveryFeeInCents: row.deliveryFeeInCents,

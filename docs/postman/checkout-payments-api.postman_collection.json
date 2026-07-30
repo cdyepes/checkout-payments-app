@@ -327,7 +327,7 @@
                           "value": "application/json"
                         }
                       ],
-                      "body": "{\n  \"id\": \"<uuid>\",\n  \"transactionId\": \"<uuid>\",\n  \"addressLine\": \"<string>\",\n  \"city\": \"<string>\",\n  \"region\": \"<string>\",\n  \"country\": \"<string>\",\n  \"postalCode\": \"<string>\",\n  \"feeInCents\": \"<integer>\",\n  \"status\": \"ASSIGNED\",\n  \"quantity\": \"<integer>\"\n}",
+                      "body": "{\n  \"id\": \"<uuid>\",\n  \"transactionId\": \"<uuid>\",\n  \"addressLine\": \"<string>\",\n  \"city\": \"<string>\",\n  \"region\": \"<string>\",\n  \"country\": \"<string>\",\n  \"postalCode\": \"<string>\",\n  \"feeInCents\": \"<integer>\",\n  \"status\": \"ASSIGNED\"\n}",
                       "cookie": [],
                       "_postman_previewlanguage": "json"
                     }
@@ -375,7 +375,7 @@
                 "method": "POST",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"productId\": \"<uuid>\",\n  \"quantity\": \"<integer>\",\n  \"customer\": {\n    \"email\": \"<email>\",\n    \"fullName\": \"<string>\",\n    \"phone\": \"<string>\",\n    \"legalId\": \"<string>\"\n  },\n  \"delivery\": {\n    \"addressLine\": \"<string>\",\n    \"city\": \"<string>\",\n    \"region\": \"<string>\",\n    \"country\": \"<string>\",\n    \"postalCode\": \"<string>\"\n  }\n}",
+                  "raw": "{\n  \"items\": [\n    { \"productId\": \"<uuid>\", \"quantity\": \"<integer>\" }\n  ],\n  \"customer\": {\n    \"email\": \"<email>\",\n    \"fullName\": \"<string>\",\n    \"phone\": \"<string>\",\n    \"legalId\": \"<string>\"\n  },\n  \"delivery\": {\n    \"addressLine\": \"<string>\",\n    \"city\": \"<string>\",\n    \"region\": \"<string>\",\n    \"country\": \"<string>\",\n    \"postalCode\": \"<string>\"\n  }\n}",
                   "options": {
                     "raw": {
                       "headerFamily": "json",
@@ -414,7 +414,7 @@
                     "method": "POST",
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"productId\": \"<uuid>\",\n  \"quantity\": \"<integer>\",\n  \"customer\": {\n    \"email\": \"<email>\",\n    \"fullName\": \"<string>\",\n    \"phone\": \"<string>\",\n    \"legalId\": \"<string>\"\n  },\n  \"delivery\": {\n    \"addressLine\": \"<string>\",\n    \"city\": \"<string>\",\n    \"region\": \"<string>\",\n    \"country\": \"<string>\",\n    \"postalCode\": \"<string>\"\n  }\n}",
+                      "raw": "{\n  \"items\": [\n    { \"productId\": \"<uuid>\", \"quantity\": \"<integer>\" }\n  ],\n  \"customer\": {\n    \"email\": \"<email>\",\n    \"fullName\": \"<string>\",\n    \"phone\": \"<string>\",\n    \"legalId\": \"<string>\"\n  },\n  \"delivery\": {\n    \"addressLine\": \"<string>\",\n    \"city\": \"<string>\",\n    \"region\": \"<string>\",\n    \"country\": \"<string>\",\n    \"postalCode\": \"<string>\"\n  }\n}",
                       "options": {
                         "raw": {
                           "headerFamily": "json",
@@ -431,7 +431,7 @@
                       "value": "application/json"
                     }
                   ],
-                  "body": "{\n  \"id\": \"<uuid>\",\n  \"reference\": \"<string>\",\n  \"status\": \"PENDING\",\n  \"productId\": \"<uuid>\",\n  \"customerId\": \"<uuid>\",\n  \"quantity\": \"<integer>\",\n  \"productAmountInCents\": \"<integer>\",\n  \"baseFeeInCents\": \"<integer>\",\n  \"deliveryFeeInCents\": \"<integer>\",\n  \"totalAmountInCents\": \"<integer>\",\n  \"currency\": \"COP\",\n  \"providerTransactionId\": \"<string>\",\n  \"providerStatus\": \"<string>\",\n  \"failureReason\": \"<string>\"\n}",
+                  "body": "{\n  \"id\": \"<uuid>\",\n  \"reference\": \"<string>\",\n  \"status\": \"PENDING\",\n  \"customerId\": \"<uuid>\",\n  \"items\": [\n    { \"productId\": \"<uuid>\", \"quantity\": \"<integer>\", \"unitPriceInCents\": \"<integer>\", \"subtotalInCents\": \"<integer>\" }\n  ],\n  \"productAmountInCents\": \"<integer>\",\n  \"baseFeeInCents\": \"<integer>\",\n  \"deliveryFeeInCents\": \"<integer>\",\n  \"totalAmountInCents\": \"<integer>\",\n  \"currency\": \"COP\",\n  \"providerTransactionId\": \"<string>\",\n  \"providerStatus\": \"<string>\",\n  \"failureReason\": \"<string>\"\n}",
                   "cookie": [],
                   "_postman_previewlanguage": "json"
                 }
@@ -544,7 +544,7 @@
                               "value": "application/json"
                             }
                           ],
-                          "body": "{\n  \"id\": \"<uuid>\",\n  \"reference\": \"<string>\",\n  \"status\": \"PENDING\",\n  \"productId\": \"<uuid>\",\n  \"customerId\": \"<uuid>\",\n  \"quantity\": \"<integer>\",\n  \"productAmountInCents\": \"<integer>\",\n  \"baseFeeInCents\": \"<integer>\",\n  \"deliveryFeeInCents\": \"<integer>\",\n  \"totalAmountInCents\": \"<integer>\",\n  \"currency\": \"COP\",\n  \"providerTransactionId\": \"<string>\",\n  \"providerStatus\": \"<string>\",\n  \"failureReason\": \"<string>\"\n}",
+                          "body": "{\n  \"id\": \"<uuid>\",\n  \"reference\": \"<string>\",\n  \"status\": \"PENDING\",\n  \"customerId\": \"<uuid>\",\n  \"items\": [\n    { \"productId\": \"<uuid>\", \"quantity\": \"<integer>\", \"unitPriceInCents\": \"<integer>\", \"subtotalInCents\": \"<integer>\" }\n  ],\n  \"productAmountInCents\": \"<integer>\",\n  \"baseFeeInCents\": \"<integer>\",\n  \"deliveryFeeInCents\": \"<integer>\",\n  \"totalAmountInCents\": \"<integer>\",\n  \"currency\": \"COP\",\n  \"providerTransactionId\": \"<string>\",\n  \"providerStatus\": \"<string>\",\n  \"failureReason\": \"<string>\"\n}",
                           "cookie": [],
                           "_postman_previewlanguage": "json"
                         }
@@ -623,7 +623,7 @@
                           "value": "application/json"
                         }
                       ],
-                      "body": "{\n  \"id\": \"<uuid>\",\n  \"reference\": \"<string>\",\n  \"status\": \"PENDING\",\n  \"productId\": \"<uuid>\",\n  \"customerId\": \"<uuid>\",\n  \"quantity\": \"<integer>\",\n  \"productAmountInCents\": \"<integer>\",\n  \"baseFeeInCents\": \"<integer>\",\n  \"deliveryFeeInCents\": \"<integer>\",\n  \"totalAmountInCents\": \"<integer>\",\n  \"currency\": \"COP\",\n  \"providerTransactionId\": \"<string>\",\n  \"providerStatus\": \"<string>\",\n  \"failureReason\": \"<string>\"\n}",
+                      "body": "{\n  \"id\": \"<uuid>\",\n  \"reference\": \"<string>\",\n  \"status\": \"PENDING\",\n  \"customerId\": \"<uuid>\",\n  \"items\": [\n    { \"productId\": \"<uuid>\", \"quantity\": \"<integer>\", \"unitPriceInCents\": \"<integer>\", \"subtotalInCents\": \"<integer>\" }\n  ],\n  \"productAmountInCents\": \"<integer>\",\n  \"baseFeeInCents\": \"<integer>\",\n  \"deliveryFeeInCents\": \"<integer>\",\n  \"totalAmountInCents\": \"<integer>\",\n  \"currency\": \"COP\",\n  \"providerTransactionId\": \"<string>\",\n  \"providerStatus\": \"<string>\",\n  \"failureReason\": \"<string>\"\n}",
                       "cookie": [],
                       "_postman_previewlanguage": "json"
                     }

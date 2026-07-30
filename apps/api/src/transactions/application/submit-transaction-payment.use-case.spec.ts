@@ -13,9 +13,10 @@ function buildTransaction(overrides: Partial<{ status: Transaction['status']; pr
     id: 'transaction-1',
     reference: 'ref-1',
     status: overrides.status ?? 'PENDING',
-    productId: 'product-1',
     customerId: 'customer-1',
-    quantity: 1,
+    items: [
+      { productId: 'product-1', quantity: 1, unitPriceInCents: 100_000, subtotalInCents: 100_000 },
+    ],
     productAmountInCents: 100_000,
     baseFeeInCents: 500_000,
     deliveryFeeInCents: 800_000,

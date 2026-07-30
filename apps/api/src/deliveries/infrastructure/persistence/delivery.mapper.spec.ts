@@ -14,8 +14,6 @@ describe('DeliveryMapper', () => {
       postalCode: '110111',
       feeInCents: 800000,
       status: 'PENDING',
-      assignedProductId: null,
-      quantity: 1,
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     };
@@ -32,7 +30,5 @@ describe('DeliveryMapper', () => {
     expect(delivery.postalCode).toBe(row.postalCode);
     expect(delivery.feeInCents).toBe(row.feeInCents);
     expect(delivery.status).toBe(row.status);
-    expect(delivery.assignedProductId).toBeNull();
-    expect(delivery.quantity).toBe(1);
   });
 });

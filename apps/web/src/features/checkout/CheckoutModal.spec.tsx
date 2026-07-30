@@ -24,15 +24,18 @@ jest.mock('@/lib/http', () => ({
 const { tokenizeCard } = jest.requireMock('@/lib/payments-gateway') as { tokenizeCard: jest.Mock };
 const { getJson } = jest.requireMock('@/lib/http') as { getJson: jest.Mock };
 
+const cartWithItem = {
+  cart: { items: [{ productId: 'product-1', quantity: 1 }] },
+};
+
 const inProgressCheckout = {
   checkout: {
     step: 'details' as const,
-    productId: 'product-1',
-    quantity: 1,
     customer: null,
     delivery: null,
     transactionId: null,
   },
+  ...cartWithItem,
 };
 
 describe('CheckoutModal', () => {
@@ -74,7 +77,7 @@ describe('CheckoutModal', () => {
   it('recovers from a reload mid-summary by returning to the details step, since the card token is never persisted', () => {
     renderWithStore(
       <CheckoutModal />,
-      { checkout: { ...inProgressCheckout.checkout, step: 'summary' } },
+      { ...inProgressCheckout, checkout: { ...inProgressCheckout.checkout, step: 'summary' } },
       '/checkout/summary',
     );
 
@@ -85,7 +88,10 @@ describe('CheckoutModal', () => {
   it('redirects home if the status step is somehow reached without a transaction id', () => {
     renderWithStore(
       <CheckoutModal />,
-      { checkout: { ...inProgressCheckout.checkout, step: 'status', transactionId: null } },
+      {
+        ...inProgressCheckout,
+        checkout: { ...inProgressCheckout.checkout, step: 'status', transactionId: null },
+      },
       '/checkout/status',
     );
 
@@ -97,7 +103,10 @@ describe('CheckoutModal', () => {
     getJson.mockReturnValue(new Promise(() => {}));
     renderWithStore(
       <CheckoutModal />,
-      { checkout: { ...inProgressCheckout.checkout, step: 'status', transactionId: 'tx-1' } },
+      {
+        ...inProgressCheckout,
+        checkout: { ...inProgressCheckout.checkout, step: 'status', transactionId: 'tx-1' },
+      },
       '/checkout/status',
     );
 
@@ -142,7 +151,7 @@ describe('CheckoutModal', () => {
     await user.click(screen.getByRole('button', { name: /close checkout/i }));
 
     expect(navigateMock).toHaveBeenCalledWith('/');
-    expect(store.getState().checkout.productId).toBeNull();
+    expect(store.getState().checkout.step).toBe('product');
   });
 
   it('closes when the backdrop itself is clicked, but not when the modal content is clicked', async () => {

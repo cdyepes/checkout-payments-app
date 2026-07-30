@@ -34,14 +34,14 @@ export class PrismaDeliveryRepository implements DeliveryRepository {
     ).map(DeliveryMapper.toDomain);
   }
 
-  assignProduct(id: string, productId: string): ResultAsync<Delivery, DomainError> {
+  markAssigned(id: string): ResultAsync<Delivery, DomainError> {
     return ResultAsync.fromPromise(
       this.prisma.client().delivery.update({
         where: { id },
-        data: { assignedProductId: productId, status: 'ASSIGNED' },
+        data: { status: 'ASSIGNED' },
       }),
       (error) =>
-        new UnexpectedError(`Failed to assign product to delivery ${id}: ${(error as Error).message}`),
+        new UnexpectedError(`Failed to mark delivery ${id} as assigned: ${(error as Error).message}`),
     ).map(DeliveryMapper.toDomain);
   }
 }

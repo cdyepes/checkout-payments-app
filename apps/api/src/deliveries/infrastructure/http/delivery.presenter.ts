@@ -13,7 +13,6 @@ export class DeliveryPresenter {
       postalCode: delivery.postalCode,
       feeInCents: delivery.feeInCents,
       status: delivery.status,
-      quantity: delivery.quantity,
     };
   }
 }

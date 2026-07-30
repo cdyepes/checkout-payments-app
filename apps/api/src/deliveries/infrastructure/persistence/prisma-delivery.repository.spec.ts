@@ -15,8 +15,6 @@ function buildRow(overrides: Partial<PrismaDelivery> = {}): PrismaDelivery {
     postalCode: null,
     feeInCents: 800000,
     status: 'PENDING',
-    assignedProductId: null,
-    quantity: 1,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
@@ -87,8 +85,6 @@ describe('PrismaDeliveryRepository', () => {
       postalCode: null,
       feeInCents: 800000,
       status: 'PENDING' as const,
-      assignedProductId: null,
-      quantity: 1,
     };
 
     const result = await repository.create(props);
@@ -113,37 +109,32 @@ describe('PrismaDeliveryRepository', () => {
       postalCode: null,
       feeInCents: 800000,
       status: 'PENDING',
-      assignedProductId: null,
-      quantity: 1,
     });
 
     expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnexpectedError);
   });
 
-  it('assignProduct() sets the product and marks the delivery ASSIGNED', async () => {
-    const update = jest
-      .fn()
-      .mockResolvedValue(buildRow({ assignedProductId: 'product-1', status: 'ASSIGNED' }));
+  it('markAssigned() marks the delivery ASSIGNED', async () => {
+    const update = jest.fn().mockResolvedValue(buildRow({ status: 'ASSIGNED' }));
     const prisma = buildPrisma({ delivery: { update } });
     const repository = new PrismaDeliveryRepository(prisma);
 
-    const result = await repository.assignProduct('delivery-1', 'product-1');
+    const result = await repository.markAssigned('delivery-1');
 
-    expect(result._unsafeUnwrap().assignedProductId).toBe('product-1');
     expect(result._unsafeUnwrap().status).toBe('ASSIGNED');
     expect(update).toHaveBeenCalledWith({
       where: { id: 'delivery-1' },
-      data: { assignedProductId: 'product-1', status: 'ASSIGNED' },
+      data: { status: 'ASSIGNED' },
     });
   });
 
-  it('assignProduct() wraps a Prisma failure', async () => {
+  it('markAssigned() wraps a Prisma failure', async () => {
     const prisma = buildPrisma({
       delivery: { update: jest.fn().mockRejectedValue(new Error('not found')) },
     });
     const repository = new PrismaDeliveryRepository(prisma);
 
-    const result = await repository.assignProduct('delivery-1', 'product-1');
+    const result = await repository.markAssigned('delivery-1');
 
     expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnexpectedError);
   });

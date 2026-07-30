@@ -1,13 +1,16 @@
-import { Transaction, TransactionProps } from './transaction.entity';
+import { Transaction, TransactionItem, TransactionProps } from './transaction.entity';
+
+const ITEMS: readonly TransactionItem[] = [
+  { productId: 'product-1', quantity: 1, unitPriceInCents: 10000, subtotalInCents: 10000 },
+];
 
 function buildTransaction(overrides: Partial<TransactionProps> = {}) {
   return Transaction.fromPersistence({
     id: 'transaction-1',
     reference: 'ref-1',
     status: 'PENDING',
-    productId: 'product-1',
     customerId: 'customer-1',
-    quantity: 1,
+    items: ITEMS,
     productAmountInCents: 10000,
     baseFeeInCents: 1000,
     deliveryFeeInCents: 500,
@@ -27,9 +30,8 @@ describe('Transaction', () => {
     expect(transaction.id).toBe('transaction-1');
     expect(transaction.reference).toBe('ref-1');
     expect(transaction.status).toBe('PENDING');
-    expect(transaction.productId).toBe('product-1');
     expect(transaction.customerId).toBe('customer-1');
-    expect(transaction.quantity).toBe(1);
+    expect(transaction.items).toEqual(ITEMS);
     expect(transaction.productAmountInCents).toBe(10000);
     expect(transaction.baseFeeInCents).toBe(1000);
     expect(transaction.deliveryFeeInCents).toBe(500);
