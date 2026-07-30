@@ -139,7 +139,9 @@ export function CartPanel() {
 
   return (
     <div className={styles.backdrop} data-testid="cart-backdrop" onClick={close}>
-      <div onClick={(event) => event.stopPropagation()}>{content}</div>
+      <div className={styles.panelWrapper} onClick={(event) => event.stopPropagation()}>
+        {content}
+      </div>
     </div>
   );
 }

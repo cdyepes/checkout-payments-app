@@ -119,7 +119,9 @@ export function CheckoutModal() {
 
   return (
     <div className={styles.backdrop} data-testid="checkout-backdrop" onClick={close}>
-      <div onClick={(event) => event.stopPropagation()}>{content}</div>
+      <div className={styles.modalWrapper} onClick={(event) => event.stopPropagation()}>
+        {content}
+      </div>
     </div>
   );
 }

@@ -18,10 +18,24 @@
   background: var(--color-bg);
 }
 
+/*
+ * The backdrop's flex child is this plain wrapper (kept only to stop click
+ * propagation to the backdrop), not .modal itself. Flex items with no explicit
+ * width size to their content's max-content width, so without this, .modal's
+ * `width: 100%` had nothing definite to resolve against and could grow to fit
+ * its widest unbreakable content instead of the viewport, overflowing and
+ * getting clipped on narrow screens (the same bug found in CartPanel).
+ */
+.modalWrapper {
+  width: 100%;
+  min-width: 0;
+}
+
 .modal {
   position: relative;
   width: 100%;
   max-width: 560px;
+  min-width: 0;
   padding: var(--space-6);
   border-radius: var(--radius-lg);
   background: var(--color-bg);
