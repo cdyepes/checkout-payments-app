@@ -96,10 +96,17 @@ from success to the underlying driver, and Prisma would commit the partial write
 
 ### Checkout flow
 
-1. **`POST /api/transactions`** — validates `stock >= quantity` against the product (rejected
-   upfront, no reservation), computes fees (flat 5,000 COP base fee + 8,000 COP delivery fee),
-   finds-or-creates the Customer by email, and creates a `PENDING` Transaction + Delivery
-   atomically. `reference` is the transaction's own UUID (globally unique, as Wompi requires).
+A checkout is a **cart of line items**, not a single product: one transaction can hold any number
+of distinct products, and the flat fees below are charged once per transaction regardless of how
+many line items it contains.
+
+1. **`POST /api/transactions`** — takes `items: [{ productId, quantity }]` (1–20 distinct
+   products, no duplicates), validates `stock >= quantity` per line (rejected upfront, no
+   reservation), computes fees (flat 5,000 COP base fee + 8,000 COP delivery fee, charged once
+   for the whole cart), finds-or-creates the Customer by email, and creates a `PENDING`
+   Transaction + its `TransactionItem` line items + Delivery atomically. Each line snapshots
+   `unitPriceInCents` at checkout time, so a later catalogue price change never rewrites a past
+   order's total. `reference` is the transaction's own UUID (globally unique, as Wompi requires).
 2. **`POST /api/transactions/:id/payment`** — takes a card token (tokenized directly
    browser → Wompi with the *public* key; our API never sees a PAN), fetches Wompi's acceptance
    token, computes the integrity signature server-side
@@ -107,14 +114,22 @@ from success to the underlying driver, and Prisma would commit the partial write
    reaches the browser), and charges the card with the *private* key.
 3. **`GET /api/transactions/:id`** — reconciles on read: if still `PENDING`, polls Wompi's
    status and applies a settled outcome exactly once (status update, delivery assignment,
-   conditional stock decrement via `UPDATE ... WHERE stock >= quantity` so it can never go
-   negative). The frontend's status screen polls this endpoint until it settles.
+   conditional stock decrement via `UPDATE ... WHERE stock >= quantity` per line so it can never
+   go negative). If the payment is approved but one or more lines have since run out of stock,
+   the transaction stays `APPROVED` (the card was already charged) and `failureReason` names the
+   short line(s) instead of the transaction being rolled back or marked as failed — the delivery
+   itself is left `PENDING` so nothing unshippable gets marked ready. The frontend's status
+   screen polls this endpoint until it settles.
 
 ### Frontend
 
-The checkout modal is a routed **background-location overlay**: `/checkout/details`,
-`/summary`, `/status` render as a Modal/Backdrop layered over the still-mounted product page via
-React Router's background-location pattern — deep-linkable and refresh-resilient. The card
+Products are added to a **cart** (`features/cart`) before checkout — the cart itself is a routed
+background-location overlay at `/cart` (a header button with an item-count badge opens it), and
+the checkout modal at `/checkout/details`, `/summary`, `/status` follows once the customer
+continues. Both reuse the same Modal/Backdrop layered over the still-mounted product page via
+React Router's background-location pattern — deep-linkable and refresh-resilient. The cart
+persists across a refresh (it's rehydrated like the rest of checkout state) and is only cleared
+once a payment is genuinely `APPROVED`, so a declined card leaves it intact to retry. The card
 token lives only in local component state (`CardDeliveryForm`), never Redux, never
 `localStorage`.
 
@@ -146,7 +161,10 @@ An OWASP-alignment pass (iteration 7) covered:
 ## API documentation
 
 - **Swagger**: served at `/docs` (locally or on the [deployed API](https://checkout-api-grnxwqyaaq-uc.a.run.app/docs)),
-  generated from the same Zod contracts used for request validation.
+  generated from the same Zod contracts used for request validation. Note that zod `.refine`
+  rules — like `items` needing 1–20 entries with no duplicate `productId` — don't surface in the
+  generated OpenAPI schema (only `.min`/`.max`/base types do); they're still enforced at request
+  time, just not self-documenting in Swagger.
 - **Postman**: [`docs/postman/checkout-payments-api.postman_collection.json`](docs/postman/checkout-payments-api.postman_collection.json),
   exported straight from the live OpenAPI document — see [`docs/postman/README.md`](docs/postman/README.md)
   for import instructions and how to regenerate it.
@@ -155,9 +173,10 @@ An OWASP-alignment pass (iteration 7) covered:
 
 ```mermaid
 erDiagram
-    PRODUCT ||--o{ TRANSACTION : "sold in"
+    PRODUCT ||--o{ TRANSACTION_ITEM : "sold as"
     CUSTOMER ||--o{ TRANSACTION : places
     CUSTOMER ||--o{ DELIVERY : receives
+    TRANSACTION ||--o{ TRANSACTION_ITEM : contains
     TRANSACTION ||--o| DELIVERY : "ships via"
 
     PRODUCT {
@@ -180,15 +199,21 @@ erDiagram
         string id PK
         string reference UK
         enum status "PENDING/APPROVED/DECLINED/ERROR/VOIDED"
-        string productId FK
         string customerId FK
-        int quantity
-        int productAmountInCents
-        int baseFeeInCents
-        int deliveryFeeInCents
+        int productAmountInCents "sum of item subtotals"
+        int baseFeeInCents "charged once per cart"
+        int deliveryFeeInCents "charged once per cart"
         int totalAmountInCents
         string providerTransactionId
         string providerStatus
+    }
+    TRANSACTION_ITEM {
+        string id PK
+        string transactionId FK
+        string productId FK
+        int quantity
+        int unitPriceInCents "snapshotted at checkout"
+        int subtotalInCents
     }
     DELIVERY {
         string id PK
@@ -199,8 +224,6 @@ erDiagram
         string region
         string country
         enum status "PENDING/ASSIGNED/DELIVERED"
-        string assignedProductId
-        int quantity
     }
 ```
 
@@ -221,11 +244,18 @@ deployment to GCP mid-iteration.
 
 ## Known trade-offs
 
-- **Stock race window**: stock is validated at `PENDING` creation (reject upfront, no
+- **Stock race window**: stock is validated per line at `PENDING` creation (reject upfront, no
   reservation) and decremented only on `APPROVED` via a conditional `UPDATE ... WHERE
   stock >= quantity`, so it can never go negative — but a narrow race window remains on the very
   last unit between two concurrent pending payments. Acceptable for this scope; a real
   inventory-reservation system would close it.
+- **Partial fulfilment on a multi-item cart**: if a payment is approved but stock for one or more
+  lines has since sold out (the race window above), the transaction is deliberately left
+  `APPROVED` with `failureReason` naming the short product(s), rather than rolled back or marked
+  `ERROR` — the customer has already been charged, so pretending otherwise would misrepresent a
+  successful payment. Whatever stock the settlement did manage to reserve is left reserved rather
+  than released, since the customer paid for those units. Fulfilling the remainder (partial
+  refund vs. restock-and-ship) is an operational decision this app surfaces but doesn't automate.
 - **Cross-browser testing**: verified in Chrome across mobile/tablet/desktop breakpoints (the
   grid collapses to one column below 480px, form rows stack below 480px). Firefox/Safari engine
   testing wasn't performed (tooling constraint, not a code concern) — the app uses no

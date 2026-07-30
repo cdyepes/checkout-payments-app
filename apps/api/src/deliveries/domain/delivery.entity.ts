@@ -11,8 +11,6 @@ export interface DeliveryProps {
   postalCode: string | null;
   feeInCents: number;
   status: DeliveryStatus;
-  assignedProductId: string | null;
-  quantity: number;
 }
 
 export class Delivery {
@@ -60,13 +58,5 @@ export class Delivery {
 
   get feeInCents(): number {
     return this.props.feeInCents;
-  }
-
-  get assignedProductId(): string | null {
-    return this.props.assignedProductId;
-  }
-
-  get quantity(): number {
-    return this.props.quantity;
   }
 }

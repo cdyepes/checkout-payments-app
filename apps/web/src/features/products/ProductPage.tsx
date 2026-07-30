@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { CartButton } from '@/features/cart/CartButton';
 import { fetchProducts } from './products.slice';
 import { ProductCard } from './ProductCard';
 import styles from './ProductPage.module.css';
@@ -16,7 +17,10 @@ export function ProductPage() {
 
   return (
     <section className={styles.page}>
-      <h1 className={styles.title}>Store</h1>
+      <div className={styles.header}>
+        <h1 className={styles.title}>Store</h1>
+        <CartButton />
+      </div>
 
       {status === 'loading' && <p className={styles.message}>Loading products…</p>}
 

@@ -5,29 +5,38 @@ import { Delivery } from '../../deliveries/domain/delivery.entity';
 import { DeliveryRepository } from '../../deliveries/domain/delivery.repository.port';
 import { ProductRepository } from '../../products/domain/product.repository.port';
 import { PaymentGateway } from '../../payments/domain/payment-gateway.port';
-import { Transaction } from '../domain/transaction.entity';
+import { Transaction, TransactionItem } from '../domain/transaction.entity';
 import { TransactionRepository } from '../domain/transaction.repository.port';
 import { ReconcileTransactionUseCase } from './reconcile-transaction.use-case';
 
 const passthroughUnitOfWork: UnitOfWork = { run: (work) => work() };
 
+const SINGLE_ITEM: readonly TransactionItem[] = [
+  { productId: 'product-1', quantity: 2, unitPriceInCents: 100_000, subtotalInCents: 200_000 },
+];
+
 function buildTransaction(
-  overrides: Partial<{ status: Transaction['status']; providerTransactionId: string | null }> = {},
+  overrides: Partial<{
+    status: Transaction['status'];
+    providerTransactionId: string | null;
+    providerStatus: string | null;
+    items: readonly TransactionItem[];
+  }> = {},
 ) {
   return Transaction.fromPersistence({
     id: 'transaction-1',
     reference: 'ref-1',
     status: overrides.status ?? 'PENDING',
-    productId: 'product-1',
     customerId: 'customer-1',
-    quantity: 2,
+    items: overrides.items ?? SINGLE_ITEM,
     productAmountInCents: 200_000,
     baseFeeInCents: 500_000,
     deliveryFeeInCents: 800_000,
     totalAmountInCents: 1_500_000,
     currency: 'COP',
-    providerTransactionId: 'providerTransactionId' in overrides ? overrides.providerTransactionId! : 'gw-tx-1',
-    providerStatus: null,
+    providerTransactionId:
+      'providerTransactionId' in overrides ? overrides.providerTransactionId! : 'gw-tx-1',
+    providerStatus: overrides.providerStatus ?? null,
     failureReason: null,
   });
 }
@@ -44,17 +53,17 @@ function buildDelivery() {
     postalCode: null,
     feeInCents: 800_000,
     status: 'PENDING',
-    assignedProductId: null,
-    quantity: 2,
   });
 }
 
-function buildRepos(overrides: {
-  transaction?: Partial<TransactionRepository>;
-  delivery?: Partial<DeliveryRepository>;
-  product?: Partial<ProductRepository>;
-  gateway?: Partial<PaymentGateway>;
-} = {}) {
+function buildRepos(
+  overrides: {
+    transaction?: Partial<TransactionRepository>;
+    delivery?: Partial<DeliveryRepository>;
+    product?: Partial<ProductRepository>;
+    gateway?: Partial<PaymentGateway>;
+  } = {},
+) {
   const transactionRepository: TransactionRepository = {
     findById: jest.fn(),
     create: jest.fn(),
@@ -66,12 +75,13 @@ function buildRepos(overrides: {
     findById: jest.fn(),
     findByTransactionId: jest.fn(),
     create: jest.fn(),
-    assignProduct: jest.fn(),
+    markAssigned: jest.fn(),
     ...overrides.delivery,
   };
   const productRepository: ProductRepository = {
     findAll: jest.fn(),
     findById: jest.fn(),
+    findManyByIds: jest.fn(),
     decrementStock: jest.fn(),
     ...overrides.product,
   };
@@ -170,7 +180,7 @@ describe('ReconcileTransactionUseCase', () => {
         },
         delivery: {
           findByTransactionId: jest.fn(() => okAsync(delivery)),
-          assignProduct: jest.fn(() => okAsync(delivery)),
+          markAssigned: jest.fn(() => okAsync(delivery)),
         },
         product: { decrementStock: jest.fn(() => okAsync(true)) },
         gateway: {
@@ -196,8 +206,192 @@ describe('ReconcileTransactionUseCase', () => {
       failureReason: null,
     });
     expect(deliveryRepository.findByTransactionId).toHaveBeenCalledWith('transaction-1');
-    expect(deliveryRepository.assignProduct).toHaveBeenCalledWith('delivery-1', 'product-1');
     expect(productRepository.decrementStock).toHaveBeenCalledWith('product-1', 2);
+    expect(deliveryRepository.markAssigned).toHaveBeenCalledWith('delivery-1');
+  });
+
+  it('settles a multi-item APPROVED transaction: decrements every line and marks the delivery assigned', async () => {
+    const items: readonly TransactionItem[] = [
+      { productId: 'product-1', quantity: 1, unitPriceInCents: 100_000, subtotalInCents: 100_000 },
+      { productId: 'product-2', quantity: 3, unitPriceInCents: 50_000, subtotalInCents: 150_000 },
+    ];
+    const transaction = buildTransaction({ items });
+    const delivery = buildDelivery();
+    const settledTransaction = buildTransaction({ status: 'APPROVED', items });
+    const decrementStock = jest.fn(() => okAsync(true));
+    const markAssigned = jest.fn(() => okAsync(delivery));
+    const { transactionRepository, deliveryRepository, productRepository, paymentGateway } =
+      buildRepos({
+        transaction: {
+          findById: jest.fn(() => okAsync(transaction)),
+          settleIfPending: jest.fn(() => okAsync(settledTransaction)),
+        },
+        delivery: {
+          findByTransactionId: jest.fn(() => okAsync(delivery)),
+          markAssigned,
+        },
+        product: { decrementStock },
+        gateway: {
+          getTransactionStatus: jest.fn(() => okAsync({ id: 'gw-tx-1', status: 'APPROVED' })),
+        },
+      });
+    const useCase = new ReconcileTransactionUseCase(
+      passthroughUnitOfWork,
+      transactionRepository,
+      deliveryRepository,
+      productRepository,
+      paymentGateway,
+    );
+
+    const result = await useCase.execute({ transactionId: 'transaction-1' });
+
+    expect(result.isOk()).toBe(true);
+    expect(decrementStock).toHaveBeenCalledTimes(2);
+    expect(decrementStock).toHaveBeenNthCalledWith(1, 'product-1', 1);
+    expect(decrementStock).toHaveBeenNthCalledWith(2, 'product-2', 3);
+    expect(markAssigned).toHaveBeenCalledWith('delivery-1');
+  });
+
+  it('decrements stock in productId-sorted order regardless of item order, to avoid deadlocks', async () => {
+    const items: readonly TransactionItem[] = [
+      { productId: 'product-9', quantity: 1, unitPriceInCents: 10_000, subtotalInCents: 10_000 },
+      { productId: 'product-2', quantity: 1, unitPriceInCents: 10_000, subtotalInCents: 10_000 },
+    ];
+    const transaction = buildTransaction({ items });
+    const delivery = buildDelivery();
+    const settledTransaction = buildTransaction({ status: 'APPROVED', items });
+    const decrementStock = jest.fn(() => okAsync(true));
+    const { transactionRepository, deliveryRepository, productRepository, paymentGateway } =
+      buildRepos({
+        transaction: {
+          findById: jest.fn(() => okAsync(transaction)),
+          settleIfPending: jest.fn(() => okAsync(settledTransaction)),
+        },
+        delivery: {
+          findByTransactionId: jest.fn(() => okAsync(delivery)),
+          markAssigned: jest.fn(() => okAsync(delivery)),
+        },
+        product: { decrementStock },
+        gateway: {
+          getTransactionStatus: jest.fn(() => okAsync({ id: 'gw-tx-1', status: 'APPROVED' })),
+        },
+      });
+    const useCase = new ReconcileTransactionUseCase(
+      passthroughUnitOfWork,
+      transactionRepository,
+      deliveryRepository,
+      productRepository,
+      paymentGateway,
+    );
+
+    await useCase.execute({ transactionId: 'transaction-1' });
+
+    expect(decrementStock).toHaveBeenNthCalledWith(1, 'product-2', 1);
+    expect(decrementStock).toHaveBeenNthCalledWith(2, 'product-9', 1);
+  });
+
+  it('keeps the transaction APPROVED and flags the shortfall when one of several items is out of stock', async () => {
+    const items: readonly TransactionItem[] = [
+      { productId: 'product-1', quantity: 1, unitPriceInCents: 100_000, subtotalInCents: 100_000 },
+      { productId: 'product-2', quantity: 3, unitPriceInCents: 50_000, subtotalInCents: 150_000 },
+    ];
+    const transaction = buildTransaction({ items });
+    const delivery = buildDelivery();
+    const settledTransaction = buildTransaction({
+      status: 'APPROVED',
+      items,
+      providerStatus: 'APPROVED',
+    });
+    const decrementStock = jest.fn((productId: string) =>
+      okAsync(productId !== 'product-2'),
+    );
+    const markAssigned = jest.fn(() => okAsync(delivery));
+    const updateStatus = jest.fn(() => okAsync(settledTransaction));
+    const { transactionRepository, deliveryRepository, productRepository, paymentGateway } =
+      buildRepos({
+        transaction: {
+          findById: jest.fn(() => okAsync(transaction)),
+          settleIfPending: jest.fn(() => okAsync(settledTransaction)),
+          updateStatus,
+        },
+        delivery: {
+          findByTransactionId: jest.fn(() => okAsync(delivery)),
+          markAssigned,
+        },
+        product: { decrementStock },
+        gateway: {
+          getTransactionStatus: jest.fn(() => okAsync({ id: 'gw-tx-1', status: 'APPROVED' })),
+        },
+      });
+    const useCase = new ReconcileTransactionUseCase(
+      passthroughUnitOfWork,
+      transactionRepository,
+      deliveryRepository,
+      productRepository,
+      paymentGateway,
+    );
+
+    const result = await useCase.execute({ transactionId: 'transaction-1' });
+
+    expect(result.isOk()).toBe(true);
+    expect(markAssigned).not.toHaveBeenCalled();
+    expect(updateStatus).toHaveBeenCalledWith('transaction-1', {
+      status: 'APPROVED',
+      providerStatus: 'APPROVED',
+      providerTransactionId: 'gw-tx-1',
+      failureReason: expect.stringContaining('product-2'),
+    });
+  });
+
+  it('keeps the transaction APPROVED and flags every product when all items are out of stock', async () => {
+    const items: readonly TransactionItem[] = [
+      { productId: 'product-1', quantity: 1, unitPriceInCents: 100_000, subtotalInCents: 100_000 },
+      { productId: 'product-2', quantity: 3, unitPriceInCents: 50_000, subtotalInCents: 150_000 },
+    ];
+    const transaction = buildTransaction({ items });
+    const delivery = buildDelivery();
+    const settledTransaction = buildTransaction({
+      status: 'APPROVED',
+      items,
+      providerStatus: 'APPROVED',
+    });
+    const decrementStock = jest.fn(() => okAsync(false));
+    const markAssigned = jest.fn(() => okAsync(delivery));
+    const updateStatus = jest.fn(
+      (_id: string, _update: Parameters<TransactionRepository['updateStatus']>[1]) =>
+        okAsync(settledTransaction),
+    );
+    const { transactionRepository, deliveryRepository, productRepository, paymentGateway } =
+      buildRepos({
+        transaction: {
+          findById: jest.fn(() => okAsync(transaction)),
+          settleIfPending: jest.fn(() => okAsync(settledTransaction)),
+          updateStatus,
+        },
+        delivery: {
+          findByTransactionId: jest.fn(() => okAsync(delivery)),
+          markAssigned,
+        },
+        product: { decrementStock },
+        gateway: {
+          getTransactionStatus: jest.fn(() => okAsync({ id: 'gw-tx-1', status: 'APPROVED' })),
+        },
+      });
+    const useCase = new ReconcileTransactionUseCase(
+      passthroughUnitOfWork,
+      transactionRepository,
+      deliveryRepository,
+      productRepository,
+      paymentGateway,
+    );
+
+    const result = await useCase.execute({ transactionId: 'transaction-1' });
+
+    expect(result.isOk()).toBe(true);
+    expect(markAssigned).not.toHaveBeenCalled();
+    const failureReason = updateStatus.mock.calls[0]![1].failureReason as string;
+    expect(failureReason).toContain('product-1');
+    expect(failureReason).toContain('product-2');
   });
 
   it('settles a DECLINED transaction without touching delivery or stock', async () => {
@@ -262,7 +456,7 @@ describe('ReconcileTransactionUseCase', () => {
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe(alreadySettled);
-    expect(deliveryRepository.assignProduct).not.toHaveBeenCalled();
+    expect(deliveryRepository.markAssigned).not.toHaveBeenCalled();
     expect(productRepository.decrementStock).not.toHaveBeenCalled();
   });
 

@@ -6,21 +6,45 @@ import { Transaction, TransactionProps } from '../../domain/transaction.entity';
 import { TransactionRepository } from '../../domain/transaction.repository.port';
 import { TransactionMapper } from './transaction.mapper';
 
+/**
+ * Every read path must hydrate the aggregate's line items — TransactionMapper.toDomain
+ * requires them. Ordered by productId so responses (and the settlement decrement order
+ * in ReconcileTransactionUseCase) are deterministic.
+ */
+const TRANSACTION_INCLUDE = {
+  items: { orderBy: { productId: 'asc' as const } },
+} as const;
+
 @Injectable()
 export class PrismaTransactionRepository implements TransactionRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   findById(id: string): ResultAsync<Transaction | null, DomainError> {
     return ResultAsync.fromPromise(
-      this.prisma.client().transaction.findUnique({ where: { id } }),
+      this.prisma.client().transaction.findUnique({ where: { id }, include: TRANSACTION_INCLUDE }),
       (error) =>
         new UnexpectedError(`Failed to fetch transaction ${id}: ${(error as Error).message}`),
     ).map((row) => (row ? TransactionMapper.toDomain(row) : null));
   }
 
   create(props: Omit<TransactionProps, 'id'>): ResultAsync<Transaction, DomainError> {
+    const { items, ...scalars } = props;
+
     return ResultAsync.fromPromise(
-      this.prisma.client().transaction.create({ data: props }),
+      this.prisma.client().transaction.create({
+        data: {
+          ...scalars,
+          items: {
+            create: items.map((item) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+              unitPriceInCents: item.unitPriceInCents,
+              subtotalInCents: item.subtotalInCents,
+            })),
+          },
+        },
+        include: TRANSACTION_INCLUDE,
+      }),
       (error) => new UnexpectedError(`Failed to create transaction: ${(error as Error).message}`),
     ).map(TransactionMapper.toDomain);
   }
@@ -33,7 +57,11 @@ export class PrismaTransactionRepository implements TransactionRepository {
     >,
   ): ResultAsync<Transaction, DomainError> {
     return ResultAsync.fromPromise(
-      this.prisma.client().transaction.update({ where: { id }, data: update }),
+      this.prisma.client().transaction.update({
+        where: { id },
+        data: update,
+        include: TRANSACTION_INCLUDE,
+      }),
       (error) =>
         new UnexpectedError(`Failed to update transaction ${id}: ${(error as Error).message}`),
     ).map(TransactionMapper.toDomain);

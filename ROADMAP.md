@@ -1,5 +1,12 @@
 # Roadmap — Iterations 2–7 (checkout business logic → deployment)
 
+> **Superseded in part**: iterations 2–7 below shipped a **single-product-per-transaction**
+> checkout, as scoped at the time. Iteration 9 (`feat/shopping-cart`) later replaced that with a
+> multi-product cart — `Transaction.productId`/`quantity` became a `TransactionItem` line-items
+> table, and the frontend gained a `/cart` overlay. This document is left as-is below as the
+> historical record of what iterations 2–7 actually planned and shipped; see the git history and
+> `README.md` for the current (post-cart) shape.
+
 ## Context
 
 Iteration 1 shipped the monorepo scaffold, hexagonal architecture template, and a fully working

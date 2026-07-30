@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import { TransactionResponseSchema } from '@checkout/contracts';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { fetchProducts } from '@/features/products/products.slice';
+import { selectCartItems, selectCartLines, selectCartSubtotalInCents } from '@/features/cart/cart.selectors';
 import { formatMoney } from '@/lib/format-money';
 import { HttpError, postJson } from '@/lib/http';
 import styles from './CheckoutSummary.module.css';
 
 // Mirrors the backend's fixed fee constants (apps/api/src/transactions/domain/fees.ts)
-// purely for this pre-submission preview — the authoritative totals always come
-// from the server's own TransactionResponse once the transaction actually exists.
+// purely for this pre-submission preview, charged once per cart (not per item) —
+// the authoritative totals always come from the server's own TransactionResponse
+// once the transaction actually exists.
 const BASE_FEE_IN_CENTS = 500_000;
 const DELIVERY_FEE_IN_CENTS = 800_000;
 
@@ -19,8 +21,11 @@ export interface CheckoutSummaryProps {
 
 export function CheckoutSummary({ cardToken, onSubmitted }: CheckoutSummaryProps) {
   const dispatch = useAppDispatch();
-  const { productId, quantity, customer, delivery } = useAppSelector((state) => state.checkout);
-  const { items, status } = useAppSelector((state) => state.products);
+  const { customer, delivery } = useAppSelector((state) => state.checkout);
+  const cartItems = useAppSelector(selectCartItems);
+  const lines = useAppSelector(selectCartLines);
+  const subtotalInCents = useAppSelector(selectCartSubtotalInCents);
+  const { status } = useAppSelector((state) => state.products);
   // Set once the transaction is created so a retry after a payment-submission
   // failure re-attempts payment on the same transaction instead of creating another.
   const [createdTransactionId, setCreatedTransactionId] = useState<string | null>(null);
@@ -33,10 +38,8 @@ export function CheckoutSummary({ cardToken, onSubmitted }: CheckoutSummaryProps
     }
   }, [status, dispatch]);
 
-  const product = items.find((item) => item.id === productId);
-
   async function handlePay() {
-    if (!productId || !customer || !delivery) return;
+    if (cartItems.length === 0 || !customer || !delivery) return;
     setError(null);
     setIsSubmitting(true);
 
@@ -45,7 +48,7 @@ export function CheckoutSummary({ cardToken, onSubmitted }: CheckoutSummaryProps
       if (!transactionId) {
         const transaction = await postJson(
           '/transactions',
-          { productId, quantity, customer, delivery },
+          { items: cartItems, customer, delivery },
           TransactionResponseSchema,
         );
         transactionId = transaction.id;
@@ -65,35 +68,36 @@ export function CheckoutSummary({ cardToken, onSubmitted }: CheckoutSummaryProps
     }
   }
 
-  if (!product) {
+  if (lines.length === 0) {
     return <p className={styles.message}>Loading summary…</p>;
   }
 
-  const productAmountInCents = product.priceInCents * quantity;
-  const totalInCents = productAmountInCents + BASE_FEE_IN_CENTS + DELIVERY_FEE_IN_CENTS;
+  const totalInCents = subtotalInCents + BASE_FEE_IN_CENTS + DELIVERY_FEE_IN_CENTS;
 
   return (
     <div className={styles.summary} data-testid="checkout-summary">
       <h2 className={styles.title}>Payment summary</h2>
 
       <dl className={styles.lines}>
-        <div className={styles.line}>
-          <dt>
-            {product.name} &times; {quantity}
-          </dt>
-          <dd>{formatMoney(productAmountInCents, product.currency)}</dd>
-        </div>
+        {lines.map((line) => (
+          <div className={styles.line} key={line.productId}>
+            <dt>
+              {line.product.name} &times; {line.quantity}
+            </dt>
+            <dd>{formatMoney(line.subtotalInCents, line.product.currency)}</dd>
+          </div>
+        ))}
         <div className={styles.line}>
           <dt>Base fee</dt>
-          <dd>{formatMoney(BASE_FEE_IN_CENTS, product.currency)}</dd>
+          <dd>{formatMoney(BASE_FEE_IN_CENTS, 'COP')}</dd>
         </div>
         <div className={styles.line}>
           <dt>Delivery fee</dt>
-          <dd>{formatMoney(DELIVERY_FEE_IN_CENTS, product.currency)}</dd>
+          <dd>{formatMoney(DELIVERY_FEE_IN_CENTS, 'COP')}</dd>
         </div>
         <div className={`${styles.line} ${styles.total}`}>
           <dt>Total</dt>
-          <dd>{formatMoney(totalInCents, product.currency)}</dd>
+          <dd>{formatMoney(totalInCents, 'COP')}</dd>
         </div>
       </dl>
 

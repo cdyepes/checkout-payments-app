@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, type Location } from 'react-router-dom';
+import type { TransactionResponse } from '@checkout/contracts';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { fetchProducts } from '@/features/products/products.slice';
+import { clearCart } from '@/features/cart/cart.slice';
+import { selectCartItemCount } from '@/features/cart/cart.selectors';
 import { resetCheckout, setStep, setTransactionId } from './checkout.slice';
 import { CardDeliveryForm } from './CardDeliveryForm';
 import { CheckoutSummary } from './CheckoutSummary';
@@ -16,7 +19,8 @@ export function CheckoutModal() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const { step, productId, transactionId } = useAppSelector((state) => state.checkout);
+  const { step, transactionId } = useAppSelector((state) => state.checkout);
+  const cartItemCount = useAppSelector(selectCartItemCount);
   // The card token lives only here, in this component's own state — never in
   // Redux, never in localStorage — so it survives the details -> summary step
   // transition (this component stays mounted across it) but nothing else.
@@ -25,16 +29,21 @@ export function CheckoutModal() {
   const background = (location.state as CheckoutLocationState | null)?.background;
   const isOverlay = Boolean(background);
 
+  // Once a transaction exists, the checkout is committed regardless of what the
+  // cart currently holds (the summary/status screens no longer need it) — only an
+  // empty cart before a transaction exists is grounds for bailing out.
+  const canProceed = cartItemCount > 0 || Boolean(transactionId);
+
   function close() {
     dispatch(resetCheckout());
     navigate('/');
   }
 
   useEffect(() => {
-    if (!productId) {
+    if (!canProceed) {
       navigate('/', { replace: true });
     }
-  }, [productId, navigate]);
+  }, [canProceed, navigate]);
 
   // Runs once on mount only, to recover from a hard refresh that dropped
   // in-memory-only state (the card token) while the persisted step survived.
@@ -44,7 +53,7 @@ export function CheckoutModal() {
   // this guard, since the card token (React state) and step (Redux) don't
   // necessarily commit in the same render.
   useEffect(() => {
-    if (!productId) return;
+    if (!canProceed) return;
     if (step === 'summary' && !cardToken) {
       dispatch(setStep('details'));
       navigate('/checkout/details', background ? { state: { background } } : { replace: true });
@@ -61,7 +70,7 @@ export function CheckoutModal() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  if (!productId) return null;
+  if (!canProceed) return null;
   if (step === 'summary' && !cardToken) return null;
   if (step === 'status' && !transactionId) return null;
 
@@ -77,7 +86,12 @@ export function CheckoutModal() {
     navigate('/checkout/status', background ? { state: { background } } : undefined);
   }
 
-  function finishCheckout() {
+  function finishCheckout(settledStatus: TransactionResponse['status']) {
+    // A DECLINED (or ERROR/VOIDED) payment leaves the cart intact so the customer
+    // can retry; only a genuinely APPROVED settlement empties it.
+    if (settledStatus === 'APPROVED') {
+      dispatch(clearCart());
+    }
     dispatch(resetCheckout());
     void dispatch(fetchProducts());
     navigate('/');
@@ -105,7 +119,9 @@ export function CheckoutModal() {
 
   return (
     <div className={styles.backdrop} data-testid="checkout-backdrop" onClick={close}>
-      <div onClick={(event) => event.stopPropagation()}>{content}</div>
+      <div className={styles.modalWrapper} onClick={(event) => event.stopPropagation()}>
+        {content}
+      </div>
     </div>
   );
 }

@@ -39,9 +39,9 @@ describe('ProductCard', () => {
     expect(screen.getByText('3 in stock')).toBeInTheDocument();
   });
 
-  it('hides the quantity stepper and buy button when out of stock', () => {
+  it('hides the quantity stepper and add-to-cart button when out of stock', () => {
     renderWithStore(<ProductCard product={buildProduct({ stock: 0 })} />);
-    expect(screen.queryByRole('button', { name: /buy/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /add to cart/i })).not.toBeInTheDocument();
   });
 
   it('clamps the quantity stepper between 1 and the available stock', async () => {
@@ -63,22 +63,51 @@ describe('ProductCard', () => {
     expect(screen.getByTestId('quantity-value')).toHaveTextContent('1');
   });
 
-  it('starts checkout with the selected quantity and navigates to the details modal', async () => {
+  it('adds the selected quantity to the cart without navigating', async () => {
     const user = userEvent.setup();
     const product = buildProduct({ id: 'product-42', stock: 5 });
     const { store } = renderWithStore(<ProductCard product={product} />);
 
     await user.click(screen.getByRole('button', { name: /increase quantity/i }));
-    await user.click(screen.getByRole('button', { name: /^buy$/i }));
+    await user.click(screen.getByRole('button', { name: /add to cart/i }));
 
-    expect(store.getState().checkout).toMatchObject({
-      step: 'details',
-      productId: 'product-42',
-      quantity: 2,
+    expect(store.getState().cart.items).toEqual([{ productId: 'product-42', quantity: 2 }]);
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('resets the stepper to 1 and shows transient confirmation after adding to the cart', async () => {
+    const user = userEvent.setup();
+    const product = buildProduct({ id: 'product-42', stock: 5 });
+    renderWithStore(<ProductCard product={product} />);
+
+    await user.click(screen.getByRole('button', { name: /increase quantity/i }));
+    await user.click(screen.getByRole('button', { name: /add to cart/i }));
+
+    expect(screen.getByRole('button', { name: /added/i })).toBeInTheDocument();
+    expect(screen.getByTestId('quantity-value')).toHaveTextContent('1');
+  });
+
+  it('hides the add-to-cart controls once the cart already holds all remaining stock', () => {
+    const product = buildProduct({ id: 'product-1', stock: 2 });
+    renderWithStore(<ProductCard product={product} />, {
+      cart: { items: [{ productId: 'product-1', quantity: 2 }] },
     });
-    expect(navigateMock).toHaveBeenCalledWith(
-      '/checkout/details',
-      expect.objectContaining({ state: expect.objectContaining({ background: expect.anything() }) }),
-    );
+
+    expect(screen.queryByRole('button', { name: /add to cart/i })).not.toBeInTheDocument();
+  });
+
+  it('caps the stepper at the stock remaining after what is already in the cart', async () => {
+    const user = userEvent.setup();
+    const product = buildProduct({ id: 'product-1', stock: 3 });
+    renderWithStore(<ProductCard product={product} />, {
+      cart: { items: [{ productId: 'product-1', quantity: 2 }] },
+    });
+
+    const increase = screen.getByRole('button', { name: /increase quantity/i });
+    expect(screen.getByTestId('quantity-value')).toHaveTextContent('1');
+    expect(increase).toBeDisabled();
+
+    await user.click(increase);
+    expect(screen.getByTestId('quantity-value')).toHaveTextContent('1');
   });
 });

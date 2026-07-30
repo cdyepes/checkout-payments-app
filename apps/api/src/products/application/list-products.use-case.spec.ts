@@ -21,6 +21,7 @@ describe('ListProductsUseCase', () => {
     const products = [buildProduct('1'), buildProduct('2')];
     const repository: ProductRepository = {
       findAll: jest.fn(() => okAsync(products)),
+      findManyByIds: jest.fn(),
       findById: jest.fn(),
       decrementStock: jest.fn(),
     };
@@ -36,6 +37,7 @@ describe('ListProductsUseCase', () => {
     const error = new UnexpectedError('db down');
     const repository: ProductRepository = {
       findAll: jest.fn(() => errAsync(error)),
+      findManyByIds: jest.fn(),
       findById: jest.fn(),
       decrementStock: jest.fn(),
     };

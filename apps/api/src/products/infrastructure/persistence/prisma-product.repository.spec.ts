@@ -72,6 +72,44 @@ describe('PrismaProductRepository', () => {
     expect(result._unsafeUnwrap()?.id).toBe('product-1');
   });
 
+  it('findManyByIds() maps every matching row to a domain Product', async () => {
+    const findMany = jest
+      .fn()
+      .mockResolvedValue([buildRow(), buildRow({ id: 'product-2', name: 'Headphones' })]);
+    const prisma = buildPrisma({ product: { findMany } });
+    const repository = new PrismaProductRepository(prisma);
+
+    const result = await repository.findManyByIds(['product-1', 'product-2']);
+
+    expect(result.isOk()).toBe(true);
+    const products = result._unsafeUnwrap();
+    expect(products.map((product) => product.id)).toEqual(['product-1', 'product-2']);
+    expect(findMany).toHaveBeenCalledWith({ where: { id: { in: ['product-1', 'product-2'] } } });
+  });
+
+  it('findManyByIds() returns an empty array when given no ids', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prisma = buildPrisma({ product: { findMany } });
+    const repository = new PrismaProductRepository(prisma);
+
+    const result = await repository.findManyByIds([]);
+
+    expect(result._unsafeUnwrap()).toEqual([]);
+    expect(findMany).toHaveBeenCalledWith({ where: { id: { in: [] } } });
+  });
+
+  it('findManyByIds() wraps a Prisma failure in UnexpectedError', async () => {
+    const prisma = buildPrisma({
+      product: { findMany: jest.fn().mockRejectedValue(new Error('connection lost')) },
+    });
+    const repository = new PrismaProductRepository(prisma);
+
+    const result = await repository.findManyByIds(['product-1']);
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnexpectedError);
+  });
+
   it('decrementStock() returns true and issues a conditional update when enough stock is available', async () => {
     const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = buildPrisma({ product: { updateMany } });

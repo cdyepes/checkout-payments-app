@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import type { ProductResponse } from '@checkout/contracts';
-import { useAppDispatch } from '@/app/hooks';
-import { startCheckout } from '@/features/checkout/checkout.slice';
+import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { addItem } from '@/features/cart/cart.slice';
 import { formatMoney } from '@/lib/format-money';
 import styles from './ProductCard.module.css';
 
 const LOW_STOCK_THRESHOLD = 5;
+const ADDED_FEEDBACK_MS = 1500;
 
 export interface ProductCardProps {
   product: ProductResponse;
@@ -14,16 +14,21 @@ export interface ProductCardProps {
 
 export function ProductCard({ product }: ProductCardProps) {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
-  const location = useLocation();
   const [quantity, setQuantity] = useState(1);
+  const [justAdded, setJustAdded] = useState(false);
+  const alreadyInCart = useAppSelector(
+    (state) => state.cart.items.find((item) => item.productId === product.id)?.quantity ?? 0,
+  );
 
+  const remainingStock = Math.max(0, product.stock - alreadyInCart);
   const isLowStock = product.stock > 0 && product.stock <= LOW_STOCK_THRESHOLD;
-  const isOutOfStock = product.stock === 0;
+  const isOutOfStock = remainingStock === 0;
 
-  function handleBuy() {
-    dispatch(startCheckout({ productId: product.id, quantity }));
-    navigate('/checkout/details', { state: { background: location } });
+  function handleAddToCart() {
+    dispatch(addItem({ productId: product.id, quantity }));
+    setQuantity(1);
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), ADDED_FEEDBACK_MS);
   }
 
   return (
@@ -37,7 +42,7 @@ export function ProductCard({ product }: ProductCardProps) {
         <div className={styles.footer}>
           <span className={styles.price}>{formatMoney(product.priceInCents, product.currency)}</span>
           <span className={`${styles.stock} ${isLowStock ? styles.stockLow : ''}`}>
-            {isOutOfStock ? 'Out of stock' : `${product.stock} in stock`}
+            {product.stock === 0 ? 'Out of stock' : `${product.stock} in stock`}
           </span>
         </div>
 
@@ -56,14 +61,14 @@ export function ProductCard({ product }: ProductCardProps) {
               <button
                 type="button"
                 aria-label={`Increase quantity of ${product.name}`}
-                onClick={() => setQuantity((current) => Math.min(product.stock, current + 1))}
-                disabled={quantity >= product.stock}
+                onClick={() => setQuantity((current) => Math.min(remainingStock, current + 1))}
+                disabled={quantity >= remainingStock}
               >
                 +
               </button>
             </div>
-            <button type="button" className={styles.buyButton} onClick={handleBuy}>
-              Buy
+            <button type="button" className={styles.buyButton} onClick={handleAddToCart}>
+              {justAdded ? 'Added ✓' : 'Add to cart'}
             </button>
           </div>
         )}

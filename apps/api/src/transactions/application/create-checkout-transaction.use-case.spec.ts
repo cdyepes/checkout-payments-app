@@ -43,9 +43,10 @@ function buildTransaction(id = 'transaction-1') {
     id,
     reference: 'ref-1',
     status: 'PENDING',
-    productId: 'product-1',
     customerId: 'customer-1',
-    quantity: 2,
+    items: [
+      { productId: 'product-1', quantity: 2, unitPriceInCents: 100_000, subtotalInCents: 200_000 },
+    ],
     productAmountInCents: 200_000,
     baseFeeInCents: 500_000,
     deliveryFeeInCents: 800_000,
@@ -69,8 +70,6 @@ function buildDelivery(id = 'delivery-1') {
     postalCode: null,
     feeInCents: 800_000,
     status: 'PENDING',
-    assignedProductId: null,
-    quantity: 2,
   });
 }
 
@@ -78,8 +77,7 @@ function buildCommand(
   overrides: Partial<CreateCheckoutTransactionCommand> = {},
 ): CreateCheckoutTransactionCommand {
   return {
-    productId: 'product-1',
-    quantity: 2,
+    items: [{ productId: 'product-1', quantity: 2 }],
     customer: {
       email: 'jane@example.com',
       fullName: 'Jane Doe',
@@ -106,7 +104,8 @@ describe('CreateCheckoutTransactionUseCase', () => {
 
     const productRepository: ProductRepository = {
       findAll: jest.fn(),
-      findById: jest.fn(() => okAsync(product)),
+      findById: jest.fn(),
+      findManyByIds: jest.fn(() => okAsync([product])),
       decrementStock: jest.fn(),
     };
     const findOrCreateByEmail = jest.fn(() => okAsync(customer));
@@ -128,7 +127,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
       findById: jest.fn(),
       findByTransactionId: jest.fn(),
       create: createDelivery,
-      assignProduct: jest.fn(),
+      markAssigned: jest.fn(),
     };
 
     const useCase = new CreateCheckoutTransactionUseCase(
@@ -154,9 +153,10 @@ describe('CreateCheckoutTransactionUseCase', () => {
     const createArgs = createTransaction.mock.calls[0]![0];
     expect(createArgs).toMatchObject({
       status: 'PENDING',
-      productId: 'product-1',
       customerId: 'customer-1',
-      quantity: 2,
+      items: [
+        { productId: 'product-1', quantity: 2, unitPriceInCents: 100_000, subtotalInCents: 200_000 },
+      ],
       productAmountInCents: 200_000, // priceInCents (100_000) * quantity (2)
       baseFeeInCents: 500_000,
       deliveryFeeInCents: 800_000,
@@ -173,15 +173,77 @@ describe('CreateCheckoutTransactionUseCase', () => {
         addressLine: 'Calle 123 #45-67',
         feeInCents: 800_000,
         status: 'PENDING',
-        quantity: 2,
       }),
     );
+  });
+
+  it('creates a multi-item transaction with fees charged once, not per item', async () => {
+    const keyboard = buildProduct({ id: 'product-1', priceInCents: 100_000, stock: 5 });
+    const headphones = buildProduct({ id: 'product-2', priceInCents: 50_000, stock: 5 });
+    const customer = buildCustomer();
+    const transaction = buildTransaction();
+    const delivery = buildDelivery();
+
+    const productRepository: ProductRepository = {
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      findManyByIds: jest.fn(() => okAsync([keyboard, headphones])),
+      decrementStock: jest.fn(),
+    };
+    const customerRepository: CustomerRepository = {
+      findById: jest.fn(),
+      findOrCreateByEmail: jest.fn(() => okAsync(customer)),
+    };
+    const createTransaction = jest.fn(
+      (_props: Parameters<TransactionRepository['create']>[0]) => okAsync(transaction),
+    );
+    const transactionRepository: TransactionRepository = {
+      findById: jest.fn(),
+      create: createTransaction,
+      updateStatus: jest.fn(),
+      settleIfPending: jest.fn(),
+    };
+    const deliveryRepository: DeliveryRepository = {
+      findById: jest.fn(),
+      findByTransactionId: jest.fn(),
+      create: jest.fn(() => okAsync(delivery)),
+      markAssigned: jest.fn(),
+    };
+
+    const useCase = new CreateCheckoutTransactionUseCase(
+      passthroughUnitOfWork,
+      productRepository,
+      customerRepository,
+      deliveryRepository,
+      transactionRepository,
+    );
+
+    const result = await useCase.execute(
+      buildCommand({
+        items: [
+          { productId: 'product-1', quantity: 2 }, // 200_000
+          { productId: 'product-2', quantity: 3 }, // 150_000
+        ],
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    const createArgs = createTransaction.mock.calls[0]![0];
+    expect(createArgs.items).toEqual([
+      { productId: 'product-1', quantity: 2, unitPriceInCents: 100_000, subtotalInCents: 200_000 },
+      { productId: 'product-2', quantity: 3, unitPriceInCents: 50_000, subtotalInCents: 150_000 },
+    ]);
+    expect(createArgs.productAmountInCents).toBe(350_000);
+    expect(createArgs.baseFeeInCents).toBe(500_000);
+    expect(createArgs.deliveryFeeInCents).toBe(800_000);
+    expect(createArgs.totalAmountInCents).toBe(1_650_000); // 350_000 + 500_000 + 800_000, fees once
   });
 
   it('fails with NotFoundError when the product does not exist', async () => {
     const productRepository: ProductRepository = {
       findAll: jest.fn(),
-      findById: jest.fn(() => okAsync(null)),
+      findById: jest.fn(),
+      findManyByIds: jest.fn(() => okAsync([])),
       decrementStock: jest.fn(),
     };
     const customerRepository: CustomerRepository = {
@@ -192,7 +254,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
       findById: jest.fn(),
       findByTransactionId: jest.fn(),
       create: jest.fn(),
-      assignProduct: jest.fn(),
+      markAssigned: jest.fn(),
     };
     const transactionRepository: TransactionRepository = {
       findById: jest.fn(),
@@ -209,18 +271,21 @@ describe('CreateCheckoutTransactionUseCase', () => {
       transactionRepository,
     );
 
-    const result = await useCase.execute(buildCommand({ productId: 'missing' }));
+    const result = await useCase.execute(
+      buildCommand({ items: [{ productId: 'missing', quantity: 1 }] }),
+    );
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toBeInstanceOf(NotFoundError);
     expect(customerRepository.findOrCreateByEmail).not.toHaveBeenCalled();
   });
 
-  it('fails with InsufficientStockError when stock is too low', async () => {
-    const product = buildProduct({ stock: 1 });
+  it('fails with NotFoundError naming the second product when only it is missing', async () => {
+    const product = buildProduct({ id: 'product-1', stock: 5 });
     const productRepository: ProductRepository = {
       findAll: jest.fn(),
-      findById: jest.fn(() => okAsync(product)),
+      findById: jest.fn(),
+      findManyByIds: jest.fn(() => okAsync([product])),
       decrementStock: jest.fn(),
     };
     const customerRepository: CustomerRepository = {
@@ -231,7 +296,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
       findById: jest.fn(),
       findByTransactionId: jest.fn(),
       create: jest.fn(),
-      assignProduct: jest.fn(),
+      markAssigned: jest.fn(),
     };
     const transactionRepository: TransactionRepository = {
       findById: jest.fn(),
@@ -248,7 +313,58 @@ describe('CreateCheckoutTransactionUseCase', () => {
       transactionRepository,
     );
 
-    const result = await useCase.execute(buildCommand({ quantity: 3 }));
+    const result = await useCase.execute(
+      buildCommand({
+        items: [
+          { productId: 'product-1', quantity: 1 },
+          { productId: 'missing-product', quantity: 1 },
+          { productId: 'product-3', quantity: 1 },
+        ],
+      }),
+    );
+
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error).toBeInstanceOf(NotFoundError);
+    expect(error.message).toContain('missing-product');
+  });
+
+  it('fails with InsufficientStockError when stock is too low', async () => {
+    const product = buildProduct({ stock: 1 });
+    const productRepository: ProductRepository = {
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      findManyByIds: jest.fn(() => okAsync([product])),
+      decrementStock: jest.fn(),
+    };
+    const customerRepository: CustomerRepository = {
+      findById: jest.fn(),
+      findOrCreateByEmail: jest.fn(),
+    };
+    const deliveryRepository: DeliveryRepository = {
+      findById: jest.fn(),
+      findByTransactionId: jest.fn(),
+      create: jest.fn(),
+      markAssigned: jest.fn(),
+    };
+    const transactionRepository: TransactionRepository = {
+      findById: jest.fn(),
+      create: jest.fn(),
+      updateStatus: jest.fn(),
+      settleIfPending: jest.fn(),
+    };
+
+    const useCase = new CreateCheckoutTransactionUseCase(
+      passthroughUnitOfWork,
+      productRepository,
+      customerRepository,
+      deliveryRepository,
+      transactionRepository,
+    );
+
+    const result = await useCase.execute(
+      buildCommand({ items: [{ productId: 'product-1', quantity: 3 }] }),
+    );
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
@@ -258,11 +374,13 @@ describe('CreateCheckoutTransactionUseCase', () => {
     expect(customerRepository.findOrCreateByEmail).not.toHaveBeenCalled();
   });
 
-  it('fails with InsufficientStockError for a zero or negative quantity', async () => {
-    const product = buildProduct({ stock: 5 });
+  it('fails with InsufficientStockError naming the second item when only it lacks stock', async () => {
+    const plenty = buildProduct({ id: 'product-1', stock: 5 });
+    const scarce = buildProduct({ id: 'product-2', stock: 1 });
     const productRepository: ProductRepository = {
       findAll: jest.fn(),
-      findById: jest.fn(() => okAsync(product)),
+      findById: jest.fn(),
+      findManyByIds: jest.fn(() => okAsync([plenty, scarce])),
       decrementStock: jest.fn(),
     };
     const customerRepository: CustomerRepository = {
@@ -273,7 +391,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
       findById: jest.fn(),
       findByTransactionId: jest.fn(),
       create: jest.fn(),
-      assignProduct: jest.fn(),
+      markAssigned: jest.fn(),
     };
     const transactionRepository: TransactionRepository = {
       findById: jest.fn(),
@@ -290,7 +408,57 @@ describe('CreateCheckoutTransactionUseCase', () => {
       transactionRepository,
     );
 
-    const result = await useCase.execute(buildCommand({ quantity: 0 }));
+    const result = await useCase.execute(
+      buildCommand({
+        items: [
+          { productId: 'product-1', quantity: 1 },
+          { productId: 'product-2', quantity: 3 },
+        ],
+      }),
+    );
+
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error).toBeInstanceOf(InsufficientStockError);
+    expect((error as InsufficientStockError).productId).toBe('product-2');
+  });
+
+  it('fails with InsufficientStockError for a zero or negative quantity', async () => {
+    const product = buildProduct({ stock: 5 });
+    const productRepository: ProductRepository = {
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      findManyByIds: jest.fn(() => okAsync([product])),
+      decrementStock: jest.fn(),
+    };
+    const customerRepository: CustomerRepository = {
+      findById: jest.fn(),
+      findOrCreateByEmail: jest.fn(),
+    };
+    const deliveryRepository: DeliveryRepository = {
+      findById: jest.fn(),
+      findByTransactionId: jest.fn(),
+      create: jest.fn(),
+      markAssigned: jest.fn(),
+    };
+    const transactionRepository: TransactionRepository = {
+      findById: jest.fn(),
+      create: jest.fn(),
+      updateStatus: jest.fn(),
+      settleIfPending: jest.fn(),
+    };
+
+    const useCase = new CreateCheckoutTransactionUseCase(
+      passthroughUnitOfWork,
+      productRepository,
+      customerRepository,
+      deliveryRepository,
+      transactionRepository,
+    );
+
+    const result = await useCase.execute(
+      buildCommand({ items: [{ productId: 'product-1', quantity: 0 }] }),
+    );
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toBeInstanceOf(InsufficientStockError);
@@ -301,7 +469,8 @@ describe('CreateCheckoutTransactionUseCase', () => {
     const error = new UnexpectedError('db down');
     const productRepository: ProductRepository = {
       findAll: jest.fn(),
-      findById: jest.fn(() => okAsync(product)),
+      findById: jest.fn(),
+      findManyByIds: jest.fn(() => okAsync([product])),
       decrementStock: jest.fn(),
     };
     const customerRepository: CustomerRepository = {
@@ -313,7 +482,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
       findById: jest.fn(),
       findByTransactionId: jest.fn(),
       create: jest.fn(),
-      assignProduct: jest.fn(),
+      markAssigned: jest.fn(),
     };
     const transactionRepository: TransactionRepository = {
       findById: jest.fn(),
@@ -345,7 +514,8 @@ describe('CreateCheckoutTransactionUseCase', () => {
 
     const productRepository: ProductRepository = {
       findAll: jest.fn(),
-      findById: jest.fn(() => okAsync(product)),
+      findById: jest.fn(),
+      findManyByIds: jest.fn(() => okAsync([product])),
       decrementStock: jest.fn(),
     };
     const customerRepository: CustomerRepository = {
@@ -362,7 +532,7 @@ describe('CreateCheckoutTransactionUseCase', () => {
       findById: jest.fn(),
       findByTransactionId: jest.fn(),
       create: jest.fn(() => okAsync(delivery)),
-      assignProduct: jest.fn(),
+      markAssigned: jest.fn(),
     };
     let runCallCount = 0;
     const unitOfWork: UnitOfWork = {

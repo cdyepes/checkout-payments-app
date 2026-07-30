@@ -1,0 +1,194 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+  background: rgba(20, 21, 26, 0.5);
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.page {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+/*
+ * The backdrop's flex child is this plain wrapper (kept only to stop click
+ * propagation to the backdrop), not .panel itself. Flex items with no explicit
+ * width size to their content's max-content width, so without this, .panel's
+ * `width: 100%` had nothing definite to resolve against and grew to fit its
+ * widest unbreakable content (e.g. a long product name) instead of the
+ * viewport — the panel then overflowed and got clipped on narrow screens.
+ */
+.panelWrapper {
+  width: 100%;
+  min-width: 0;
+}
+
+.panel {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  min-width: 0;
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--color-border);
+}
+
+.title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.message {
+  color: var(--color-text-muted);
+}
+
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.lineBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.lineName {
+  margin: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  width: fit-content;
+}
+
+.stepper button {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.stepper button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.lineEnd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.lineSubtotal {
+  font-weight: 700;
+}
+
+.remove {
+  border: none;
+  background: none;
+  color: var(--color-danger);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.summaryRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.feesNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.continueButton {
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-brand);
+  color: var(--color-brand-contrast);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}

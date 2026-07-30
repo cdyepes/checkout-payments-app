@@ -21,6 +21,7 @@ describe('GetProductUseCase', () => {
     const product = buildProduct('1');
     const repository: ProductRepository = {
       findAll: jest.fn(),
+      findManyByIds: jest.fn(),
       findById: jest.fn(() => okAsync(product)),
       decrementStock: jest.fn(),
     };
@@ -35,6 +36,7 @@ describe('GetProductUseCase', () => {
   it('returns a NotFoundError when the repository finds nothing', async () => {
     const repository: ProductRepository = {
       findAll: jest.fn(),
+      findManyByIds: jest.fn(),
       findById: jest.fn(() => okAsync(null)),
       decrementStock: jest.fn(),
     };
@@ -50,6 +52,7 @@ describe('GetProductUseCase', () => {
     const error = new UnexpectedError('db down');
     const repository: ProductRepository = {
       findAll: jest.fn(),
+      findManyByIds: jest.fn(),
       findById: jest.fn(() => errAsync(error)),
       decrementStock: jest.fn(),
     };

@@ -13,9 +13,10 @@ function buildTransaction(id: string) {
     id,
     reference: 'ref-1',
     status: 'PENDING',
-    productId: 'product-1',
     customerId: 'customer-1',
-    quantity: 1,
+    items: [
+      { productId: 'product-1', quantity: 1, unitPriceInCents: 100_000, subtotalInCents: 100_000 },
+    ],
     productAmountInCents: 100_000,
     baseFeeInCents: 500_000,
     deliveryFeeInCents: 800_000,
@@ -28,8 +29,7 @@ function buildTransaction(id: string) {
 }
 
 const requestBody = {
-  productId: '11111111-1111-4111-8111-111111111111',
-  quantity: 1,
+  items: [{ productId: '11111111-1111-4111-8111-111111111111', quantity: 1 }],
   customer: { email: 'jane@example.com', fullName: 'Jane Doe', phone: '+573001234567' },
   delivery: { addressLine: 'Calle 123', city: 'Bogotá', region: 'Cundinamarca', country: 'CO' },
 };

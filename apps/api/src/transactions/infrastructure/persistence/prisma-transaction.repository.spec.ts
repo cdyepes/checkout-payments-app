@@ -1,16 +1,27 @@
-import { Transaction as PrismaTransaction } from '@prisma/client';
 import { UnexpectedError } from '../../../shared/domain/domain-error';
 import { PrismaService } from '../../../shared/infrastructure/prisma/prisma.service';
 import { PrismaTransactionRepository } from './prisma-transaction.repository';
+import { TransactionRow } from './transaction.mapper';
 
-function buildRow(overrides: Partial<PrismaTransaction> = {}): PrismaTransaction {
+const TRANSACTION_INCLUDE = { items: { orderBy: { productId: 'asc' } } };
+
+function buildRow(overrides: Partial<TransactionRow> = {}): TransactionRow {
   return {
     id: 'transaction-1',
     reference: 'ref-1',
     status: 'PENDING',
-    productId: 'product-1',
     customerId: 'customer-1',
-    quantity: 2,
+    items: [
+      {
+        id: 'item-1',
+        transactionId: 'transaction-1',
+        productId: 'product-1',
+        quantity: 2,
+        unitPriceInCents: 100_000,
+        subtotalInCents: 200_000,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ],
     productAmountInCents: 200_000,
     baseFeeInCents: 500_000,
     deliveryFeeInCents: 800_000,
@@ -39,15 +50,21 @@ describe('PrismaTransactionRepository', () => {
     expect(result._unsafeUnwrap()).toBeNull();
   });
 
-  it('findById() maps a matching row', async () => {
-    const prisma = buildPrisma({
-      transaction: { findUnique: jest.fn().mockResolvedValue(buildRow()) },
-    });
+  it('findById() maps a matching row, including its items', async () => {
+    const findUnique = jest.fn().mockResolvedValue(buildRow());
+    const prisma = buildPrisma({ transaction: { findUnique } });
     const repository = new PrismaTransactionRepository(prisma);
 
     const result = await repository.findById('transaction-1');
 
     expect(result._unsafeUnwrap()?.id).toBe('transaction-1');
+    expect(result._unsafeUnwrap()?.items).toEqual([
+      { productId: 'product-1', quantity: 2, unitPriceInCents: 100_000, subtotalInCents: 200_000 },
+    ]);
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: 'transaction-1' },
+      include: TRANSACTION_INCLUDE,
+    });
   });
 
   it('findById() wraps a Prisma failure', async () => {
@@ -61,16 +78,17 @@ describe('PrismaTransactionRepository', () => {
     expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnexpectedError);
   });
 
-  it('create() persists and maps the created row', async () => {
+  it('create() persists a nested items write and maps the created row', async () => {
     const create = jest.fn().mockResolvedValue(buildRow({ id: 'transaction-2' }));
     const prisma = buildPrisma({ transaction: { create } });
     const repository = new PrismaTransactionRepository(prisma);
     const props = {
       reference: 'ref-2',
       status: 'PENDING' as const,
-      productId: 'product-1',
       customerId: 'customer-1',
-      quantity: 2,
+      items: [
+        { productId: 'product-1', quantity: 2, unitPriceInCents: 100_000, subtotalInCents: 200_000 },
+      ],
       productAmountInCents: 200_000,
       baseFeeInCents: 500_000,
       deliveryFeeInCents: 800_000,
@@ -84,7 +102,54 @@ describe('PrismaTransactionRepository', () => {
     const result = await repository.create(props);
 
     expect(result._unsafeUnwrap().id).toBe('transaction-2');
-    expect(create).toHaveBeenCalledWith({ data: props });
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        reference: 'ref-2',
+        status: 'PENDING',
+        customerId: 'customer-1',
+        productAmountInCents: 200_000,
+        baseFeeInCents: 500_000,
+        deliveryFeeInCents: 800_000,
+        totalAmountInCents: 1_500_000,
+        currency: 'COP',
+        providerTransactionId: null,
+        providerStatus: null,
+        failureReason: null,
+        items: {
+          create: [
+            { productId: 'product-1', quantity: 2, unitPriceInCents: 100_000, subtotalInCents: 200_000 },
+          ],
+        },
+      },
+      include: TRANSACTION_INCLUDE,
+    });
+  });
+
+  it('create() issues one nested create per line for a multi-item cart', async () => {
+    const create = jest.fn().mockResolvedValue(buildRow({ id: 'transaction-3' }));
+    const prisma = buildPrisma({ transaction: { create } });
+    const repository = new PrismaTransactionRepository(prisma);
+
+    await repository.create({
+      reference: 'ref-3',
+      status: 'PENDING',
+      customerId: 'customer-1',
+      items: [
+        { productId: 'product-1', quantity: 1, unitPriceInCents: 100_000, subtotalInCents: 100_000 },
+        { productId: 'product-2', quantity: 2, unitPriceInCents: 50_000, subtotalInCents: 100_000 },
+      ],
+      productAmountInCents: 200_000,
+      baseFeeInCents: 500_000,
+      deliveryFeeInCents: 800_000,
+      totalAmountInCents: 1_500_000,
+      currency: 'COP',
+      providerTransactionId: null,
+      providerStatus: null,
+      failureReason: null,
+    });
+
+    const callArgs = create.mock.calls[0]![0];
+    expect(callArgs.data.items.create).toHaveLength(2);
   });
 
   it('create() wraps a Prisma failure', async () => {
@@ -96,9 +161,10 @@ describe('PrismaTransactionRepository', () => {
     const result = await repository.create({
       reference: 'ref-2',
       status: 'PENDING',
-      productId: 'product-1',
       customerId: 'customer-1',
-      quantity: 2,
+      items: [
+        { productId: 'product-1', quantity: 2, unitPriceInCents: 100_000, subtotalInCents: 200_000 },
+      ],
       productAmountInCents: 200_000,
       baseFeeInCents: 500_000,
       deliveryFeeInCents: 800_000,
@@ -112,7 +178,7 @@ describe('PrismaTransactionRepository', () => {
     expect(result._unsafeUnwrapErr()).toBeInstanceOf(UnexpectedError);
   });
 
-  it('updateStatus() persists and maps the updated row', async () => {
+  it('updateStatus() persists and maps the updated row, including its items', async () => {
     const update = jest.fn().mockResolvedValue(buildRow({ status: 'APPROVED' }));
     const prisma = buildPrisma({ transaction: { update } });
     const repository = new PrismaTransactionRepository(prisma);
@@ -133,6 +199,7 @@ describe('PrismaTransactionRepository', () => {
         providerTransactionId: 'gw-tx-1',
         failureReason: null,
       },
+      include: TRANSACTION_INCLUDE,
     });
   });
 

@@ -13,8 +13,6 @@ describe('Delivery', () => {
       postalCode: '110111',
       feeInCents: 500000,
       status: 'PENDING',
-      assignedProductId: null,
-      quantity: 1,
     });
 
     expect(delivery.id).toBe('delivery-1');
@@ -27,7 +25,5 @@ describe('Delivery', () => {
     expect(delivery.postalCode).toBe('110111');
     expect(delivery.status).toBe('PENDING');
     expect(delivery.feeInCents).toBe(500000);
-    expect(delivery.assignedProductId).toBeNull();
-    expect(delivery.quantity).toBe(1);
   });
 });

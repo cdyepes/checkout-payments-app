@@ -14,8 +14,6 @@ export class DeliveryMapper {
       postalCode: row.postalCode,
       feeInCents: row.feeInCents,
       status: row.status,
-      assignedProductId: row.assignedProductId,
-      quantity: row.quantity,
     });
   }
 }

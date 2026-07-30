@@ -17,8 +17,6 @@ function buildDelivery(id: string) {
     postalCode: null,
     feeInCents: 800000,
     status: 'PENDING',
-    assignedProductId: null,
-    quantity: 1,
   });
 }
 
