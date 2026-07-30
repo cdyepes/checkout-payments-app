@@ -1,6 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithStore } from '@/test/render-with-store';
+import { formatCardNumber } from '@/lib/card';
 import { PaymentGatewayError } from '@/lib/payments-gateway';
 import { CardDeliveryForm } from './CardDeliveryForm';
 
@@ -59,6 +60,34 @@ describe('CardDeliveryForm', () => {
 
     expect(screen.getByLabelText(/Card number/i)).toHaveValue('4242 4242 4242 4242');
     expect(screen.getByLabelText(/Expiry/i)).toHaveValue('12/29');
+  });
+
+  it('caps the card number input at 16 digits once a Mastercard prefix is recognized', async () => {
+    const user = userEvent.setup();
+    renderWithStore(<CardDeliveryForm onTokenized={jest.fn()} />);
+    const input = screen.getByLabelText(/Card number/i);
+
+    // 51xxxx is a Mastercard prefix (always 16 digits); type well past that.
+    const rawDigits = `51${'0'.repeat(20)}`;
+    await user.type(input, rawDigits);
+
+    expect(screen.getByTestId('card-brand')).toHaveTextContent('Mastercard');
+    expect(input).toHaveValue(formatCardNumber(rawDigits.slice(0, 16)));
+    expect((input as HTMLInputElement).value.replace(/\D/g, '')).toHaveLength(16);
+  });
+
+  it('allows up to 19 digits for a recognized Visa prefix', async () => {
+    const user = userEvent.setup();
+    renderWithStore(<CardDeliveryForm onTokenized={jest.fn()} />);
+    const input = screen.getByLabelText(/Card number/i);
+
+    // '4' is a Visa prefix (13/16/19 digits); type well past the 19-digit max.
+    const rawDigits = `4${'0'.repeat(25)}`;
+    await user.type(input, rawDigits);
+
+    expect(screen.getByTestId('card-brand')).toHaveTextContent('Visa');
+    expect(input).toHaveValue(formatCardNumber(rawDigits.slice(0, 19)));
+    expect((input as HTMLInputElement).value.replace(/\D/g, '')).toHaveLength(19);
   });
 
   it('shows validation errors and does not tokenize when the form is empty', async () => {

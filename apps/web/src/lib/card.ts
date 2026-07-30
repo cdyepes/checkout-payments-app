@@ -4,16 +4,6 @@ export function normalizeCardNumber(value: string): string {
   return value.replace(/\D/g, '');
 }
 
-export function formatCardNumber(value: string): string {
-  return normalizeCardNumber(value).slice(0, 19).replace(/(.{4})/g, '$1 ').trim();
-}
-
-export function formatExpiryInput(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-}
-
 export function detectCardBrand(value: string): CardBrand {
   const digits = normalizeCardNumber(value);
   if (digits.length === 0) return 'unknown';
@@ -25,6 +15,38 @@ export function detectCardBrand(value: string): CardBrand {
   if (prefix4 >= 2221 && prefix4 <= 2720) return 'mastercard';
 
   return 'unknown';
+}
+
+// Visa issues 13, 16 and 19-digit cards; Mastercard is always 16. A brand we
+// can't identify from the prefix keeps the old permissive 13-19 range so an
+// unrecognized-but-real card (Amex, Discover, ...) isn't wrongly rejected.
+const VALID_LENGTHS_BY_BRAND: Record<CardBrand, readonly number[]> = {
+  visa: [13, 16, 19],
+  mastercard: [16],
+  unknown: [13, 14, 15, 16, 17, 18, 19],
+};
+
+export function maxDigitsForBrand(brand: CardBrand): number {
+  return Math.max(...VALID_LENGTHS_BY_BRAND[brand]);
+}
+
+// The formatted (grouped-with-spaces) input length for a brand's longest valid
+// card number — e.g. 16 digits -> "4242 4242 4242 4242" is 19 characters.
+export function maxFormattedLength(brand: CardBrand): number {
+  const digits = maxDigitsForBrand(brand);
+  return digits + Math.floor((digits - 1) / 4);
+}
+
+export function formatCardNumber(value: string): string {
+  const digits = normalizeCardNumber(value);
+  const brand = detectCardBrand(digits);
+  return digits.slice(0, maxDigitsForBrand(brand)).replace(/(.{4})/g, '$1 ').trim();
+}
+
+export function formatExpiryInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
 }
 
 export function passesLuhnCheck(value: string): boolean {
@@ -47,7 +69,8 @@ export function passesLuhnCheck(value: string): boolean {
 
 export function isValidCardNumber(value: string): boolean {
   const digits = normalizeCardNumber(value);
-  return digits.length >= 13 && digits.length <= 19 && passesLuhnCheck(digits);
+  const brand = detectCardBrand(digits);
+  return VALID_LENGTHS_BY_BRAND[brand].includes(digits.length) && passesLuhnCheck(digits);
 }
 
 const EXPIRY_PATTERN = /^(0[1-9]|1[0-2])\/(\d{2})$/;

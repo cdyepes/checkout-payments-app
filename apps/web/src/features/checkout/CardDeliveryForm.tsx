@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAppDispatch } from '@/app/hooks';
-import { detectCardBrand, formatCardNumber, formatExpiryInput, parseExpiry } from '@/lib/card';
+import {
+  detectCardBrand,
+  formatCardNumber,
+  formatExpiryInput,
+  maxFormattedLength,
+  parseExpiry,
+} from '@/lib/card';
 import { PaymentGatewayError, tokenizeCard } from '@/lib/payments-gateway';
 import { setCustomerAndDelivery } from './checkout.slice';
 import { CheckoutDetailsFormSchema, type CheckoutDetailsFormValues } from './checkout-details.schema';
@@ -171,7 +177,7 @@ export function CardDeliveryForm({ onTokenized }: CardDeliveryFormProps) {
             id="card.cardNumber"
             inputMode="numeric"
             autoComplete="cc-number"
-            maxLength={23}
+            maxLength={maxFormattedLength(cardBrand)}
             {...cardNumberField}
             onChange={(event) => {
               event.target.value = formatCardNumber(event.target.value);

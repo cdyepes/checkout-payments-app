@@ -1,3 +1,13 @@
+/*
+ * Breakpoint scale used by every `@media` rule in this app (CSS custom
+ * properties can't be referenced inside a media query condition, only in the
+ * declarations it contains, so these stay as documentation rather than real
+ * variables — keep new breakpoints in the app aligned to these three values):
+ *   480px  — phone -> tablet-narrow (2-column product grid)
+ *   768px  — tablet -> small desktop (wider shell, same column count)
+ *   1100px — desktop (3-column product grid)
+ */
+
 :root {
   --color-bg: #ffffff;
   --color-surface: #f6f7f9;
@@ -28,6 +38,24 @@
   --shadow-md: 0 8px 24px rgba(20, 21, 26, 0.12);
 
   --max-content-width: 480px;
+}
+
+/*
+ * The shell was a hard 480px cap on every viewport, wasting most of the
+ * screen on tablet/desktop. Stepping it here (rather than in global.css)
+ * keeps every consumer of --max-content-width — the app shell, and any
+ * future full-page layout — in sync with a single source of truth.
+ */
+@media (min-width: 768px) {
+  :root {
+    --max-content-width: 768px;
+  }
+}
+
+@media (min-width: 1100px) {
+  :root {
+    --max-content-width: 1100px;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
